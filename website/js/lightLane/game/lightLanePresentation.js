@@ -64,14 +64,17 @@ class LightLanePresentation {
     show(best, onPause) {
         this._best    = best;
         this._onPause = onPause;
+        LightLaneModels.compensate();
         this._model   = loader.animatedModels().getByCode(LightLaneModels.RUNNER);
         this._runner  = new AnimatedInstance(this._model).bind();
+        // Its look kept under the ambient lowered for its own light.
+        this._runner.getInstance().setRenderLight(LightLaneTuning.LIGHT_COMPENSATION);
         this._glowFaces = this._runner.getInstance().getObject().faceList.filter((face) => face.glow);
         const slots   = (Math.ceil((LightLaneTuning.TRACK_BEHIND + LightLaneTuning.TRACK_AHEAD) / LightLaneTuning.TILE_LENGTH) + 1);
         this._rows    = Array.from({length: slots}, () => ({
             row:   null,
             codes: LightLaneTuning.LANES_3.map(() => LightLaneModels.TILE),
-            lit:   false,
+            lit:   null,
             tiles: LightLaneTuning.LANES_3.map(() => LightLanePresentation.instance(this._id(LightLaneModels.TILE))),
             edge:  LightLanePresentation.instance(this._id(LightLaneModels.TILE_EDGE)),
             far:   false
@@ -340,8 +343,12 @@ class LightLanePresentation {
                 slot.edge.placeAt((lanes[lanes.length - 1] * LightLaneTuning.LANE_WIDTH), y, centre);
             }
             const far = this._isFar(slot.far, Math.abs(centre - camZ), this._farDecor);
-            // Only the tiles the runner's light can reach are cut in cells (art § 2): the others stay cheap.
-            const lit = (LightLaneTuning.RUNNER_LIGHT_ON && (Math.abs(centre - z) < ((length / 2) + this._light.range)));
+            // Only the tiles the runner's light can reach are cut in fine cells, the next ring in coarser ones (art § 2):
+            // the others stay cheap.
+            const reach = (Math.abs(centre - z) - ((length / 2) + this._light.range));
+            // One intermediate row, ahead only (the camera sees almost nothing behind the runner).
+            const ahead = (centre > z);
+            const lit   = ((!LightLaneTuning.RUNNER_LIGHT_ON) ? null : ((reach < 0) ? LightLaneModels.LIT_SUFFIX : ((ahead && (reach < length)) ? LightLaneModels.MID_SUFFIX : null)));
             if ((far !== slot.far) || (lit !== slot.lit)) {
                 slot.far = far;
                 slot.lit = lit;
@@ -414,10 +421,11 @@ class LightLanePresentation {
         instance.setRenderLight(1 - taken);
     }
 
-    // A tile's object: the lit one near the runner's light (a plain tile only), else the near or far one.
+    // A tile's object (plain or holed): its celled level near the runner's light (LIT_SUFFIX or MID_SUFFIX), else the
+    // near or far one.
     _tileVariant(code, far, lit) {
-        if (lit && (code === LightLaneModels.TILE)) {
-            return (code + LightLaneModels.LIT_SUFFIX);
+        if (lit !== null) {
+            return (code + lit);
         }
 
         return (code + ((far) ? LightLaneModels.FAR_SUFFIX : ''));

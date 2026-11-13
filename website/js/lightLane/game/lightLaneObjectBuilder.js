@@ -6,6 +6,20 @@ class LightLaneObjectBuilder {
     constructor() {
         this._points = [];
         this._faces  = [];
+        this._floor  = false;
+    }
+
+    /**
+     * The faces made next are floor (true): painted LIGHT_COMPENSATION times lighter, outside the light group, so the
+     * runner's light shows on them; the others (false) are in LightLaneModels.LIGHT_GROUP, whose factor keeps their
+     * look under the lowered ambient.
+     *
+     * @param {boolean} floor
+     */
+    setFloor(floor) {
+        this._floor = floor;
+
+        return this;
     }
 
     /**
@@ -194,9 +208,20 @@ class LightLaneObjectBuilder {
 
     // Object3dLoader reads three corners a face (object3dLoader.js): a polygon goes in as a fan of triangles from its
     // first corner, which keeps the corners' turn.
+    // A floor colour under the lowered ambient: LIGHT_COMPENSATION times lighter, an alpha kept.
+    static _lighter(color) {
+        const k = LightLaneTuning.LIGHT_COMPENSATION;
+
+        return color.map((c, i) => ((i < 3) ? Math.min(LightLaneObjectBuilder.CHANNEL_MAX, (c * k)) : c));
+    }
+
     _face(pts, color, glow, blendAdd = false) {
+        const paint = ((this._floor) ? LightLaneObjectBuilder._lighter(color) : [...color]);
         for (let i = 1; (i + 1) < pts.length; i++) {
-            const face = {pts: [pts[0], pts[i], pts[i + 1]], color: [...color]};
+            const face = {pts: [pts[0], pts[i], pts[i + 1]], color: [...paint]};
+            if (!this._floor) {
+                face.lightGroup = LightLaneObjectBuilder.LIGHT_GROUP;
+            }
             if (glow) {
                 face.glow = true;
             }
@@ -207,3 +232,6 @@ class LightLaneObjectBuilder {
         }
     }
 }
+
+LightLaneObjectBuilder.LIGHT_GROUP = 'lit';
+LightLaneObjectBuilder.CHANNEL_MAX = 255;

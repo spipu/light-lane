@@ -84,8 +84,15 @@ LightLaneTuning.RUNNER_LIGHT_ON       = true;
 // is clamped, so a stronger light mostly widens the part brought to the full painted colour.
 LightLaneTuning.RUNNER_LIGHT_COLOR    = [225, 375, 412];
 LightLaneTuning.RUNNER_LIGHT_RANGE    = 2.0;
-LightLaneTuning.AMBIENT_LIT           = [170, 170, 170];
+// With the light on, the ambient is a third: the floor is painted LIGHT_COMPENSATION times lighter (the same away
+// from the light, up to that many times lighter in it) and every other face keeps its look through its light group's
+// factor (LightLaneModels.LIGHT_GROUP) or its instance's render light.
+LightLaneTuning.AMBIENT_LIT           = [85, 85, 85];
+LightLaneTuning.LIGHT_COMPENSATION    = (LightLaneTuning.RUNNER_LIGHT_ON ? (255 / LightLaneTuning.AMBIENT_LIT[0]) : 1);
 LightLaneTuning.TILE_TOP_CELL         = 0.5;
+// The tiles one tile further than the lit ones: their top in cells of TILE_MID_CELL (user request: an intermediate
+// level of detail before the finest).
+LightLaneTuning.TILE_MID_CELL         = 1.0;
 LightLaneTuning.BACKGROUND            = [10, 20, 24];
 LightLaneTuning.Z_NEAR                = 0.2;
 LightLaneTuning.Z_FAR                 = 140;
