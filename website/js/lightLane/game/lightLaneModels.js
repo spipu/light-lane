@@ -121,10 +121,10 @@ class LightLaneModels {
         // The left line of each lane; a whole row has the right edge's too.
         for (let k = 0; k < lanes; k++) {
             const x = (-w + (k * LightLaneTuning.LANE_WIDTH));
-            b.line([x, h, -l], [x, h, l], lineSize, color.LINE_DIM, [((k === 0) ? -1 : 0), 1, 0]);
+            b.line([x, h, -l], [x, h, l], lineSize, color.LINE_DIM, [((k === 0) ? -1 : 0), 1, 0], true);
         }
         if (lanes > 1) {
-            b.line([w, h, -l], [w, h, l], lineSize, color.LINE_DIM, [1, 1, 0]);
+            b.line([w, h, -l], [w, h, l], lineSize, color.LINE_DIM, [1, 1, 0], true);
         }
         LightLaneModels._marks(b, -l, l, w);
 
@@ -285,11 +285,11 @@ class LightLaneModels {
         for (const [z0, z1] of [[-l, from], [to, l]]) {
             // The slab after the hole shows its front: the gap's far wall.
             LightLaneModels._slab(b, z0, z1, cells, (z0 === to));
-            b.line([-w, h, z0], [-w, h, z1], decorSize, color.LINE_DIM);
+            b.line([-w, h, z0], [-w, h, z1], decorSize, color.LINE_DIM, null, true);
             LightLaneModels._marks(b, z0, z1);
         }
-        b.line([-w, h, from], [w, h, from], lineSize, color.LETHAL, [0, 1, 1]);
-        b.line([-w, h, to], [w, h, to], lineSize, color.LETHAL, [0, 1, -1]);
+        b.line([-w, h, from], [w, h, from], lineSize, color.LETHAL, [0, 1, 1], true);
+        b.line([-w, h, to], [w, h, to], lineSize, color.LETHAL, [0, 1, -1], true);
 
         return b.data();
     }
@@ -398,7 +398,7 @@ class LightLaneModels {
         const l = (LightLaneTuning.TILE_LENGTH / 2);
         const h = LightLaneTuning.TILE_THICKNESS;
         const b = new LightLaneObjectBuilder();
-        b.line([w, h, -l], [w, h, l], lineSize, LightLaneTuning.COLOR.LINE_DIM);
+        b.line([w, h, -l], [w, h, l], lineSize, LightLaneTuning.COLOR.LINE_DIM, null, true);
 
         return b.data();
     }

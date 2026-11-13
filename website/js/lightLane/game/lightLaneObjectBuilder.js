@@ -27,9 +27,10 @@ class LightLaneObjectBuilder {
      *
      * @param {number[]} min
      * @param {number[]} max
-     * @param {{top: number[]|null, side: number[], bottom: number[]|null, front?: number[]|null, back?: number[]|null}}
-     *        colors - 0-255; front (−z) and back (+z) default to side; null leaves that face out (never seen: the
-     *        camera stays above the ground and looks ahead)
+     * @param {{top: number[]|null, side: number[], bottom: number[]|null, front?: number[]|null, back?: number[]|null,
+     *          left?: number[]|null, right?: number[]|null}} colors - 0-255; front (−z), back (+z), left (−x) and right
+     *        (+x) default to side; null leaves that face out (never seen: the camera stays above the ground and looks
+     *        ahead)
      * @param {boolean}  glow
      */
     box(min, max, colors, glow = false) {
@@ -52,14 +53,20 @@ class LightLaneObjectBuilder {
         if (colors.bottom !== null) {
             this._face([c[0], c[1], c[5], c[4]], colors.bottom, glow);
         }
+        const left  = ((colors.left === undefined) ? colors.side : colors.left);
+        const right = ((colors.right === undefined) ? colors.side : colors.right);
         if (front !== null) {
             this._face([c[0], c[3], c[2], c[1]], front, glow);
         }
         if (back !== null) {
             this._face([c[5], c[6], c[7], c[4]], back, glow);
         }
-        this._face([c[4], c[7], c[3], c[0]], colors.side, glow);
-        this._face([c[1], c[2], c[6], c[5]], colors.side, glow);
+        if (left !== null) {
+            this._face([c[4], c[7], c[3], c[0]], left, glow);
+        }
+        if (right !== null) {
+            this._face([c[1], c[2], c[6], c[5]], right, glow);
+        }
 
         return this;
     }
@@ -73,8 +80,10 @@ class LightLaneObjectBuilder {
      * @param {number}   size
      * @param {number[]} color
      * @param {number[]} outward - per axis -1, 0 or +1: the side the line leans to across the edge
+     * @param {boolean}  onFloor - lying on the floor: no bottom, and no end faces (along z the next tile's line hides
+     *                             them; across, the camera looking ahead never sees them) — only what can be seen
      */
-    line(from, to, size, color, outward = null) {
+    line(from, to, size, color, outward = null, onFloor = false) {
         const lean = (outward ?? [Math.sign(from[0] + to[0]), 1, 0]);
         const min  = [0, 0, 0];
         const max  = [0, 0, 0];
@@ -91,7 +100,13 @@ class LightLaneObjectBuilder {
             max[axis] = (centre + (size / 2));
         }
 
-        return this.box(min, max, {top: color, side: color, bottom: color}, true);
+        if (!onFloor) {
+            return this.box(min, max, {top: color, side: color, bottom: color}, true);
+        }
+        const alongZ = (Math.abs(to[2] - from[2]) > 0);
+
+        return this.box(min, max, {top: color, side: color, bottom: null, front: ((alongZ) ? null : color), back: ((alongZ) ? null : color),
+            left: ((alongZ) ? color : null), right: ((alongZ) ? color : null)}, true);
     }
 
     /**
