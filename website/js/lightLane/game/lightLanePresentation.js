@@ -217,7 +217,9 @@ class LightLanePresentation {
      * @returns {Instance} a new instance of the object, outside any batch
      */
     static instance(objectId) {
-        const id = loader.instances().loadFromData(null, {object: objectId, position: [0, 0, 0], rotation: [0, 0, 0], trigger: 'none', keyframes: [], collisionShape: 'none'});
+        // Spawned: finalised alone (loadFromData would rerun the whole loader's load check at each of the pools' hundreds
+        // of instances, seconds before the first frame).
+        const id = loader.instances().spawnFromData(null, {object: objectId, position: [0, 0, 0], rotation: [0, 0, 0], trigger: 'none', keyframes: [], collisionShape: 'none'});
 
         return loader.instances().get(id);
     }
