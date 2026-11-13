@@ -13,8 +13,9 @@ class LightLaneObjectBuilder {
      *
      * @param {number[]} min
      * @param {number[]} max
-     * @param {{top: number[], side: number[], bottom: number[]|null}} colors - 0-255; bottom null: no bottom face (one
-     *        never seen from the camera, above the ground)
+     * @param {{top: number[]|null, side: number[], bottom: number[]|null, front?: number[]|null, back?: number[]|null}}
+     *        colors - 0-255; front (−z) and back (+z) default to side; null leaves that face out (never seen: the
+     *        camera stays above the ground and looks ahead)
      * @param {boolean}  glow
      */
     box(min, max, colors, glow = false) {
@@ -29,12 +30,20 @@ class LightLaneObjectBuilder {
             p(x0, y0, z1), p(x1, y0, z1), p(x1, y1, z1), p(x0, y1, z1)
         ];
         // c[0..3]: the front (z0) corners from bottom left, clockwise seen from the front; c[4..7]: the same at z1.
-        this._face([c[3], c[7], c[6], c[2]], colors.top, glow);
+        const front = ((colors.front === undefined) ? colors.side : colors.front);
+        const back  = ((colors.back === undefined) ? colors.side : colors.back);
+        if (colors.top !== null) {
+            this._face([c[3], c[7], c[6], c[2]], colors.top, glow);
+        }
         if (colors.bottom !== null) {
             this._face([c[0], c[1], c[5], c[4]], colors.bottom, glow);
         }
-        this._face([c[0], c[3], c[2], c[1]], colors.side, glow);
-        this._face([c[5], c[6], c[7], c[4]], colors.side, glow);
+        if (front !== null) {
+            this._face([c[0], c[3], c[2], c[1]], front, glow);
+        }
+        if (back !== null) {
+            this._face([c[5], c[6], c[7], c[4]], back, glow);
+        }
         this._face([c[4], c[7], c[3], c[0]], colors.side, glow);
         this._face([c[1], c[2], c[6], c[5]], colors.side, glow);
 

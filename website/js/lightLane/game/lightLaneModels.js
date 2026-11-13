@@ -97,19 +97,19 @@ class LightLaneModels {
         return b.data();
     }
 
-    // A slab of a tile from z0 to z1; lit (the runner's light near it), its top cut in cells of TILE_TOP_CELL so the
-    // light, computed at the vertices, shows on it.
-    static _slab(b, z0, z1, lit = false) {
+    // A slab of a tile from z0 to z1, without the faces the camera never sees: no bottom; no back (it faces away from a
+    // camera looking ahead); a front only where nothing lies before it (the far wall of a gap). Lit (the runner's light
+    // near it), its top is cut in cells of TILE_TOP_CELL so the light, computed at the vertices, shows on it.
+    static _slab(b, z0, z1, lit = false, front = false) {
         const color = LightLaneTuning.COLOR;
         const w     = (LightLaneTuning.LANE_WIDTH / 2);
         const h     = LightLaneTuning.TILE_THICKNESS;
-        const faces = {top: color.FLOOR_TOP, side: color.BODY_SIDE, bottom: null};
+        const faces = {top: ((lit) ? null : color.FLOOR_TOP), side: color.BODY_SIDE, bottom: null, front: ((front) ? color.BODY_SIDE : null), back: null};
+        b.box([-w, 0, z0], [w, h, z1], faces);
         if (!lit) {
-            b.box([-w, 0, z0], [w, h, z1], faces);
             return;
         }
-        // The box without its top, then the top in cells.
-        b.box([-w, 0, z0], [w, (h - LightLaneModels.TOP_INSET), z1], faces);
+        // The top in cells.
         const cell = LightLaneTuning.TILE_TOP_CELL;
         const nx   = Math.round((2 * w) / cell);
         const nz   = Math.max(1, Math.round((z1 - z0) / cell));
@@ -209,7 +209,8 @@ class LightLaneModels {
         const to    = (from + spec.length);
         const b     = new LightLaneObjectBuilder();
         for (const [z0, z1] of [[-l, from], [to, l]]) {
-            LightLaneModels._slab(b, z0, z1);
+            // The slab after the hole shows its front: the gap's far wall.
+            LightLaneModels._slab(b, z0, z1, false, (z0 === to));
             b.line([-w, h, z0], [-w, h, z1], decorSize, color.LINE_DIM);
             LightLaneModels._marks(b, z0, z1);
         }
@@ -263,8 +264,6 @@ class LightLaneModels {
 }
 
 LightLaneModels.ASSETS     = './assets/lightLane/';
-// The slab under a celled top stops this short of it (its own top stays hidden under the cells).
-LightLaneModels.TOP_INSET  = 0.001;
 LightLaneModels.FAR_SUFFIX = 'Far';
 LightLaneModels.LIT_SUFFIX = 'Lit';
 LightLaneModels.TILE       = 'tile';
