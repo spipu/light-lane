@@ -5,9 +5,14 @@
  * thicker lines (art § 4). Built with LightLaneObjectBuilder.
  */
 class LightLaneModels {
-    // Inside the loader batch.
-    static load() {
+    /**
+     * Inside the loader batch.
+     *
+     * @param {boolean} lod - the tiles' tops coloured by level of detail (the test mode's `lod`)
+     */
+    static load(lod = false) {
         LightLaneModels.CODES.length = 0;
+        LightLaneModels._lod = lod;
         const color = LightLaneTuning.COLOR;
         const decor = [LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.LINE_SIZE_DECOR_FAR];
         [false, true].forEach((far, i) => {
@@ -31,14 +36,13 @@ class LightLaneModels {
         for (const [name, rgb] of Object.entries(LightLaneModels.SHARD_COLORS)) {
             LightLaneModels._load(LightLaneModels.SHARD + name, LightLaneModels._shard(color[rgb]));
         }
-        // The tile under the runner's light (its top in cells), used near the runner only.
-        LightLaneModels._load(LightLaneModels.TILE + LightLaneModels.LIT_SUFFIX, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.TILE_TOP_CELL));
-        LightLaneModels._load(LightLaneModels.TILE + LightLaneModels.MID_SUFFIX, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.TILE_MID_CELL));
-        // The holed tiles too: a gap is often met right under the runner's light.
-        for (const code of LightLaneModels.GAPS) {
-            const spec = LightLaneTuning.OBSTACLES[code];
-            LightLaneModels._load(LightLaneModels.gapTileCode(code) + LightLaneModels.LIT_SUFFIX, LightLaneModels._gapTile(spec, LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.LINE_SIZE, LightLaneTuning.TILE_TOP_CELL));
-            LightLaneModels._load(LightLaneModels.gapTileCode(code) + LightLaneModels.MID_SUFFIX, LightLaneModels._gapTile(spec, LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.LINE_SIZE, LightLaneTuning.TILE_MID_CELL));
+        // Under the runner's light, by half tile (a mark every half tile shows it as a row): the half the runner is on
+        // in fine cells, the next half in coarser cells; holed tiles too (a gap is often met right under the light).
+        for (const [suffix, cells] of Object.entries(LightLaneModels.LIT_LEVELS)) {
+            LightLaneModels._load(LightLaneModels.TILE + suffix, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, cells));
+            for (const code of LightLaneModels.GAPS) {
+                LightLaneModels._load(LightLaneModels.gapTileCode(code) + suffix, LightLaneModels._gapTile(LightLaneTuning.OBSTACLES[code], LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.LINE_SIZE, cells));
+            }
         }
         LightLaneModels._load(LightLaneModels.BACKDROP, LightLaneModels._backdrop());
         loader.animatedModels().loadByCode(LightLaneModels.RUNNER, LightLaneModels.ASSETS + 'models/runner.gltf');
@@ -105,13 +109,13 @@ class LightLaneModels {
 
     // A lane's tile: a slab, its top at the origin's height + TILE_THICKNESS, a line along its top left edge, cross
     // lines every TILE_MARK_STEP from its start (they show the speed).
-    static _tile(lineSize, cell) {
+    static _tile(lineSize, cells) {
         const color = LightLaneTuning.COLOR;
         const w     = (LightLaneTuning.LANE_WIDTH / 2);
         const l     = (LightLaneTuning.TILE_LENGTH / 2);
         const h     = LightLaneTuning.TILE_THICKNESS;
         const b     = new LightLaneObjectBuilder();
-        LightLaneModels._slab(b, -l, l, cell);
+        LightLaneModels._slab(b, -l, l, cells);
         b.line([-w, h, -l], [-w, h, l], lineSize, color.LINE_DIM);
         LightLaneModels._marks(b, -l, l);
 
@@ -119,34 +123,50 @@ class LightLaneModels {
     }
 
     // A slab of a tile from z0 to z1, without the faces the camera never sees: no bottom; no back (it faces away from a
-    // camera looking ahead); a front only where nothing lies before it (the far wall of a gap). Lit (the runner's light
-    // near it), its top is cut in cells of `cell` metres so the light, computed at the vertices, shows on it.
-    static _slab(b, z0, z1, cell = null, front = false) {
-        const lit   = (cell !== null);
+    // camera looking ahead); a front only where nothing lies before it (the far wall of a gap). Near the runner's light,
+    // each half of its top may be cut in cells (`cells`: [first half, second half], metres or null) so the light,
+    // computed at the vertices, shows on it.
+    static _slab(b, z0, z1, cells = null, front = false) {
         const color = LightLaneTuning.COLOR;
         const w     = (LightLaneTuning.LANE_WIDTH / 2);
         const h     = LightLaneTuning.TILE_THICKNESS;
         b.box([-w, 0, z0], [w, h, z1], {top: null, side: color.BODY_SIDE, bottom: null, front: ((front) ? color.BODY_SIDE : null), back: null});
         b.setFloor(true);
-        if (!lit) {
-            b.polygon([[-w, h, z0], [-w, h, z1], [w, h, z1], [w, h, z0]], color.FLOOR_TOP);
-            b.setFloor(false);
-            return;
-        }
-        // The top in cells.
-        const nx   = Math.round((2 * w) / cell);
-        const nz   = Math.max(1, Math.round((z1 - z0) / cell));
-        const dz   = ((z1 - z0) / nz);
-        for (let i = 0; i < nx; i++) {
-            const x0 = (-w + (i * cell));
-            const x1 = (x0 + cell);
-            for (let k = 0; k < nz; k++) {
-                const za = (z0 + (k * dz));
-                const zb = (za + dz);
-                b.polygon([[x0, h, za], [x0, h, zb], [x1, h, zb], [x1, h, za]], color.FLOOR_TOP);
+        // The top, half by half of the tile (its first half before z = 0, its second after), each plain or in cells.
+        for (const [half, from, to] of [[0, z0, Math.min(z1, 0)], [1, Math.max(z0, 0), z1]]) {
+            if (to <= from) {
+                continue;
+            }
+            const cell = ((cells === null) ? null : cells[half]);
+            const top  = LightLaneModels._topColor(cell);
+            if (cell === null) {
+                b.polygon([[-w, h, from], [-w, h, to], [w, h, to], [w, h, from]], top);
+                continue;
+            }
+            const nx = Math.round((2 * w) / cell);
+            const nz = Math.max(1, Math.round((to - from) / cell));
+            const dz = ((to - from) / nz);
+            for (let i = 0; i < nx; i++) {
+                const x0 = (-w + (i * cell));
+                const x1 = (x0 + cell);
+                for (let k = 0; k < nz; k++) {
+                    const za = (from + (k * dz));
+                    const zb = (za + dz);
+                    b.polygon([[x0, h, za], [x0, h, zb], [x1, h, zb], [x1, h, za]], top);
+                }
             }
         }
         b.setFloor(false);
+    }
+
+    // The colour of a tile's top: FLOOR_TOP, or under the test mode's `lod` the colour of its level (cell size).
+    static _topColor(cell) {
+        if (!LightLaneModels._lod) {
+            return LightLaneTuning.COLOR.FLOOR_TOP;
+        }
+        const colors = LightLaneTuning.LOD_COLORS;
+
+        return ((cell === null) ? colors.plain : ((cell === LightLaneTuning.TILE_TOP_CELL) ? colors.fine : colors.mid));
     }
 
     // The cross marks of a tile's top between z0 and z1 (tile coordinates): painted strips of TILE_MARK_WIDTH lying
@@ -241,7 +261,7 @@ class LightLaneModels {
 
     // A tile with the hole of a gap (art § 5.2): the slab before and after it, the left line on both, LETHAL lines
     // across its front and back edges.
-    static _gapTile(spec, decorSize, lineSize, cell) {
+    static _gapTile(spec, decorSize, lineSize, cells) {
         const color = LightLaneTuning.COLOR;
         const w     = (LightLaneTuning.LANE_WIDTH / 2);
         const l     = (LightLaneTuning.TILE_LENGTH / 2);
@@ -251,7 +271,7 @@ class LightLaneModels {
         const b     = new LightLaneObjectBuilder();
         for (const [z0, z1] of [[-l, from], [to, l]]) {
             // The slab after the hole shows its front: the gap's far wall.
-            LightLaneModels._slab(b, z0, z1, cell, (z0 === to));
+            LightLaneModels._slab(b, z0, z1, cells, (z0 === to));
             b.line([-w, h, z0], [-w, h, z1], decorSize, color.LINE_DIM);
             LightLaneModels._marks(b, z0, z1);
         }
@@ -373,10 +393,17 @@ class LightLaneModels {
 
 LightLaneModels.ASSETS     = './assets/lightLane/';
 LightLaneModels.FAR_SUFFIX = 'Far';
+LightLaneModels._lod       = false;
 // The codes of the objects built here (load()).
 LightLaneModels.CODES      = [];
-LightLaneModels.LIT_SUFFIX = 'Lit';
-LightLaneModels.MID_SUFFIX = 'Mid';
+// Levels of a tile under the runner's light, by half: F fine (TILE_TOP_CELL), M coarser (TILE_MID_CELL), P plain; the
+// variants a run needs (the fine halves: those the light reaches and the camera sees, one or two; then one coarser).
+LightLaneModels.LIT_LEVELS = Object.freeze({
+    FF: Object.freeze([LightLaneTuning.TILE_TOP_CELL, LightLaneTuning.TILE_TOP_CELL]),
+    FM: Object.freeze([LightLaneTuning.TILE_TOP_CELL, LightLaneTuning.TILE_MID_CELL]),
+    MP: Object.freeze([LightLaneTuning.TILE_MID_CELL, null]),
+    PF: Object.freeze([null, LightLaneTuning.TILE_TOP_CELL]),
+});
 LightLaneModels.TILE       = 'tile';
 LightLaneModels.TILE_EDGE  = 'tileEdge';
 LightLaneModels.BACKDROP   = 'backdrop';

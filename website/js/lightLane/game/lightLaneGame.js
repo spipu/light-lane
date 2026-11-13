@@ -40,7 +40,7 @@ class LightLaneGame {
         const best = await lightLaneScores.list().then((scores) => ((scores.length > 0) ? scores[0].score : 0), () => 0);
         loader.reset();
         loader.beginBatch();
-        this._presentation.build();
+        this._presentation.build(this._testMode.isLod());
         loader.setCallback(() => {
             loader.clearCallback();
             this._guard(this._begin, best);

@@ -48,9 +48,13 @@ class LightLanePresentation {
         this._light        = new Light([...LightLaneTuning.RUNNER_LIGHT_COLOR], (LightLaneTuning.RUNNER_LIGHT_RANGE * LightLaneTuning.RUNNER_HEIGHT / 2), [0, 0, 0]);
     }
 
-    // Inside the loader batch.
-    build() {
-        LightLaneModels.load();
+    /**
+     * Inside the loader batch.
+     *
+     * @param {boolean} lod - the tiles coloured by level of detail (the test mode's `lod`)
+     */
+    build(lod = false) {
+        LightLaneModels.load(lod);
 
         return this;
     }
@@ -344,10 +348,9 @@ class LightLanePresentation {
                 slot.edge.placeAt((lanes[lanes.length - 1] * LightLaneTuning.LANE_WIDTH), y, centre);
             }
             const far = this._isFar(slot.far, Math.abs(centre - camZ), this._farDecor);
-            // Under the runner's light (art § 2): the runner's own row in fine cells, the next one in coarser cells,
-            // every other row plain (user request: exactly one row of each).
-            const runnerRow = Math.floor(z / length);
-            const lit       = ((!LightLaneTuning.RUNNER_LIGHT_ON) ? null : ((row === runnerRow) ? LightLaneModels.LIT_SUFFIX : ((row === (runnerRow + 1)) ? LightLaneModels.MID_SUFFIX : null)));
+            // Under the runner's light (art § 2), by half tile (a mark every half tile shows it as a row): fine where the
+            // light falls and the camera sees, one coarser row after, all the rest plain (user requests).
+            const lit = ((LightLaneTuning.RUNNER_LIGHT_ON) ? LightLanePresentation._litLevel(row, z, this._light.range) : null);
             if ((far !== slot.far) || (lit !== slot.lit)) {
                 slot.far = far;
                 slot.lit = lit;
@@ -428,14 +431,33 @@ class LightLanePresentation {
         instance.setRenderLight(1 - taken);
     }
 
-    // A tile's object (plain or holed): its celled level near the runner's light (LIT_SUFFIX or MID_SUFFIX), else the
-    // near or far one.
+    // A tile's object (plain or holed): its celled variant near the runner's light (LightLaneModels.LIT_LEVELS), else
+    // the near or far one.
     _tileVariant(code, far, lit) {
         if (lit !== null) {
             return (code + lit);
         }
 
         return (code + ((far) ? LightLaneModels.FAR_SUFFIX : ''));
+    }
+
+    /**
+     * The fine halves: every half tile the runner's light reaches that the camera sees (from GROUND_SEEN_BEHIND behind
+     * the runner to the light's range ahead), one or two; then one coarser half; the rest plain.
+     *
+     * @param {int}    row   - a tile's row
+     * @param {number} z     - the runner's z
+     * @param {number} reach - the light's range
+     * @returns {string|null} its LightLaneModels.LIT_LEVELS variant, null when both halves are plain
+     */
+    static _litLevel(row, z, reach) {
+        const size  = (LightLaneTuning.TILE_LENGTH / 2);
+        const first = Math.floor((z - LightLaneTuning.GROUND_SEEN_BEHIND) / size);
+        const last  = Math.floor((z + reach) / size);
+        const level = (h) => (((h >= first) && (h <= last)) ? 'F' : ((h === (last + 1)) ? 'M' : 'P'));
+        const code  = (level(2 * row) + level((2 * row) + 1));
+
+        return ((code === 'PP') ? null : code);
     }
 
     _isFar(wasFar, distance, threshold) {

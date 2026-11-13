@@ -93,6 +93,10 @@ LightLaneTuning.TILE_TOP_CELL         = 0.5;
 // The tiles one tile further than the lit ones: their top in cells of TILE_MID_CELL (user request: an intermediate
 // level of detail before the finest).
 LightLaneTuning.TILE_MID_CELL         = 1.0;
+// The camera sees the ground this far behind the runner (art § 8): the fine cells start there.
+LightLaneTuning.GROUND_SEEN_BEHIND    = 1.1;
+// The test mode's `lod`: the tiles' tops coloured by level: fine cells red, coarser cells green, every other top blue.
+LightLaneTuning.LOD_COLORS            = Object.freeze({fine: [90, 22, 22], mid: [22, 80, 26], plain: [22, 30, 90]});
 LightLaneTuning.BACKGROUND            = [10, 20, 24];
 LightLaneTuning.Z_NEAR                = 0.2;
 LightLaneTuning.Z_FAR                 = 140;

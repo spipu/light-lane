@@ -1,6 +1,6 @@
 /**
  * The test mode (gameplay § 13), read once from the address: ?test=<options>, options separated by ",", each "name" or
- * "name:value" (seed, tier, track, script, speed, pilot, shield). Active on the local host only (localhost, 127.0.0.1): on any
+ * "name:value" (seed, tier, track, script, speed, lod, pilot, shield). Active on the local host only (localhost, 127.0.0.1): on any
  * other host, the production included, the parameter is ignored without a word. Never offered by the interface; it lets
  * the runs be checked in the browser without playing: written rows, timed orders, the robot, no death.
  */
@@ -18,6 +18,7 @@ class LightLaneTestMode {
         this._pilot  = false;
         this._shield = false;
         this._speed  = null;   // a fixed speed, m/s, or null
+        this._lod    = false;  // the tiles' levels of detail shown in colours
         if (!LightLaneTestMode.LOCAL_HOSTS.includes(hostname)) {
             return;
         }
@@ -76,6 +77,11 @@ class LightLaneTestMode {
         return this._shield;
     }
 
+    // The tiles' tops coloured by level of detail: red the fine cells, green the coarser ones, blue the plain tops.
+    isLod() {
+        return this._lod;
+    }
+
     /**
      * @returns {number|null} a fixed speed, m/s (0: the track stands still, to look at it), or null
      */
@@ -106,6 +112,9 @@ class LightLaneTestMode {
                 if (!Number.isFinite(this._speed) || (this._speed < 0)) {
                     throw new Error('LightLaneTestMode - bad speed ' + value);
                 }
+                break;
+            case 'lod':
+                this._lod = true;
                 break;
             case 'pilot':
                 this._pilot = true;
