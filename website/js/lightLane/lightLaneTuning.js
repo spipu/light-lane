@@ -109,6 +109,10 @@ LightLaneTuning.Z_FAR                 = 140;
 // The bloom's halo keeps none of the depth shading (user request: the halo grows with the depth, the lines keep their
 // size): a distant line keeps its whole halo (RendererWebglBloom glowDepthShading).
 LightLaneTuning.BLOOM_GLOW_DEPTH_SHADING = 0;
+// From half the track's reach on (user request), the halo keeps its size on screen: the glow grows with the depth past
+// BLOOM_GLOW_FAR, up to BLOOM_GLOW_FAR_MAX times at the track's end (RendererWebglBloom glowFar / glowFarMax).
+LightLaneTuning.BLOOM_GLOW_FAR           = (LightLaneTuning.CAMERA_BACK + (LightLaneTuning.TRACK_AHEAD / 2));
+LightLaneTuning.BLOOM_GLOW_FAR_MAX       = ((LightLaneTuning.CAMERA_BACK + LightLaneTuning.TRACK_AHEAD) / LightLaneTuning.BLOOM_GLOW_FAR);
 LightLaneTuning.DEPTH_SHADING         = Object.freeze({visibility: 50.7, visibilityMax: 10, shadeBase: 1.268, shadeScale: 0, rampCount: 32, strength: 1});
 
 // --- Palette (art § 3), 0-255 ---

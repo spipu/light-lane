@@ -39,7 +39,8 @@ class LightLanePresentation {
         this._free         = new Map();   // object code → free instances
         this._frame        = 0;
         this._events       = [];      // the runner's clip events of a frame (footsteps: the sound, step 13)
-        this._bloom        = {glowDepthShading: LightLaneTuning.BLOOM_GLOW_DEPTH_SHADING};   // RendererWebglBloom.DEFAULTS otherwise
+        this._bloom        = {glowDepthShading: LightLaneTuning.BLOOM_GLOW_DEPTH_SHADING, glowFar: LightLaneTuning.BLOOM_GLOW_FAR,
+            glowFarMax: LightLaneTuning.BLOOM_GLOW_FAR_MAX};   // RendererWebglBloom.DEFAULTS otherwise
         this._facing       = [0, 0, 0];   // the runner's rotation, degrees: facing +z, its lean in z
         // The runner's light (test, LightLaneTuning.RUNNER_LIGHT_ON): its position moved in place every frame.
         this._light        = new Light([...LightLaneTuning.RUNNER_LIGHT_COLOR], (LightLaneTuning.RUNNER_LIGHT_RANGE * LightLaneTuning.RUNNER_HEIGHT / 2), [0, 0, 0]);
