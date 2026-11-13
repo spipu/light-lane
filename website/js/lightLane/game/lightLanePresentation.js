@@ -33,11 +33,9 @@ class LightLanePresentation {
         this._glowFaces    = [];
         this._fragileShown = false;
         this._time         = 0;
-        this._rows         = [];      // pool slots: {row, codes: string[], tiles: Instance[], edge: Instance, far}
-        this._canvasWidth  = 0;
-        this._farLines     = Infinity;
+        this._rows         = [];      // pool slots: {row, codes: string[], tiles: Instance[], edge: Instance, whole: Instance, gaps, lit}
         this._ids          = new Map();   // object code → id
-        this._views        = new Map();   // entity → {serial, code, instance, far, frame}
+        this._views        = new Map();   // entity → {serial, code, instance, frame}
         this._free         = new Map();   // object code → free instances
         this._frame        = 0;
         this._events       = [];      // the runner's clip events of a frame (footsteps: the sound, step 13)
@@ -82,7 +80,6 @@ class LightLanePresentation {
             edge:  LightLanePresentation.instance(this._id(LightLaneModels.TILE_EDGE)),
             whole: LightLanePresentation.instance(this._id(LightLaneModels.ROW3)),
             gaps:  false,
-            far:   0          // the level of its lines: LightLaneModels.TRACK_LEVELS index
         }));
         this._effects.bind();
         this._buildDisplay();
@@ -179,7 +176,6 @@ class LightLanePresentation {
             this._camera.follow(dt, simulation.getX(), simulation.getY(), simulation.getZ(), simulation.getRunner().getLaneSide());
             this._effects.update(dt, this._engine);
         }
-        this._updateFarDistances();
         this._engine.setBloom((lightLaneSettings.isBloomOn() && (this._rendererCode === LightLanePresentation.BLOOM_RENDERER)) ? this._bloom : null);
         this._draw();
         this._screen.update();
@@ -345,7 +341,7 @@ class LightLanePresentation {
     }
 
     // Each pool slot holds one row of tiles (row = floor(z / TILE_LENGTH)), placed when its row changes, holed under a
-    // gap; the far variant past the distance where a line would be under LINE_FAR_PIXELS (art § 4).
+    // gap; its top in cells under the runner's light.
     _drawTrack() {
         const engine = this._engine;
         const track  = this._simulation.getTrack();
@@ -353,7 +349,6 @@ class LightLanePresentation {
         const length = LightLaneTuning.TILE_LENGTH;
         const first  = Math.floor((z - LightLaneTuning.TRACK_BEHIND) / length);
         const last   = Math.floor((z + LightLaneTuning.TRACK_AHEAD) / length);
-        const camZ   = (z - LightLaneTuning.CAMERA_BACK);
         const y      = -LightLaneTuning.TILE_THICKNESS;
         const lanes  = LightLaneTuning.LANES_3;
         for (let row = first; row <= last; row++) {
@@ -367,25 +362,20 @@ class LightLanePresentation {
                     const gap = track.gapIn(lane, start);
                     slot.gaps     = (slot.gaps || (gap !== null));
                     slot.codes[i] = ((gap !== null) ? LightLaneModels.gapTileCode(gap) : LightLaneModels.TILE);
-                    slot.tiles[i].setObject(this._id(this._tileVariant(slot.codes[i], slot.far, slot.lit)));
+                    slot.tiles[i].setObject(this._id(this._tileVariant(slot.codes[i], slot.lit)));
                     slot.tiles[i].placeAt((lane * LightLaneTuning.LANE_WIDTH), y, centre);
                 });
                 slot.edge.placeAt((lanes[lanes.length - 1] * LightLaneTuning.LANE_WIDTH), y, centre);
-                slot.whole.setObject(this._id(this._tileVariant(LightLaneModels.ROW3, slot.far, slot.lit)));
+                slot.whole.setObject(this._id(this._tileVariant(LightLaneModels.ROW3, slot.lit)));
                 slot.whole.placeAt(0, y, centre);
             }
-            // The track's lines keep their size at any distance (user request: no thicker lines far away; the halo
-            // grows instead).
-            const far = 0;
             // Under the runner's light (art § 2), by half tile (a mark every half tile shows it as a row): fine where the
             // light falls and the camera sees, one coarser row after, all the rest plain (user requests).
             const lit = ((LightLaneTuning.RUNNER_LIGHT_ON) ? LightLanePresentation._litLevel(row, z, this._light.range) : null);
-            if ((far !== slot.far) || (lit !== slot.lit)) {
-                slot.far = far;
+            if (lit !== slot.lit) {
                 slot.lit = lit;
-                slot.tiles.forEach((tile, i) => tile.setObject(this._id(this._tileVariant(slot.codes[i], far, lit))));
-                slot.edge.setObject(this._id(LightLaneModels.TILE_EDGE + LightLaneModels.TRACK_LEVELS[far]));
-                slot.whole.setObject(this._id(this._tileVariant(LightLaneModels.ROW3, far, lit)));
+                slot.tiles.forEach((tile, i) => tile.setObject(this._id(this._tileVariant(slot.codes[i], lit))));
+                slot.whole.setObject(this._id(this._tileVariant(LightLaneModels.ROW3, lit)));
             }
             // A row without a gap is one tile across its lanes (no separation between them); with a gap, a tile a lane.
             if (!slot.gaps) {
@@ -404,7 +394,6 @@ class LightLanePresentation {
     _drawEntities() {
         const engine  = this._engine;
         const frame   = ++this._frame;
-        const camZ    = (this._simulation.getZ() - LightLaneTuning.CAMERA_BACK);
         const runTime = this._simulation.getRunTime();
         for (const entity of this._simulation.getTrack().getActive()) {
             const code = LightLaneModels.obstacleCode(entity);
@@ -422,18 +411,13 @@ class LightLanePresentation {
                 view = undefined;
             }
             if (view === undefined) {
-                view = {serial: entity.serial, code: code, instance: this._acquire(code), far: false, frame: frame};
+                view = {serial: entity.serial, code: code, instance: this._acquire(code), frame: frame};
                 this._views.set(entity, view);
             }
             view.frame = frame;
             if (coin) {
                 this._placeCoin(view.instance, entity, since);
             } else {
-                const far = this._isFar(view.far, Math.abs((entity.z + (entity.length / 2)) - camZ), this._farLines);
-                if (far !== view.far) {
-                    view.far = far;
-                    view.instance.setObject(this._id(code + ((far) ? LightLaneModels.FAR_SUFFIX : '')));
-                }
                 view.instance.placeAt(entity.x, 0, (entity.z + (entity.length / 2)));
             }
             engine.drawInstance(view.instance);
@@ -458,26 +442,16 @@ class LightLanePresentation {
     }
 
     // A tile's object (plain or holed): its celled variant near the runner's light (LightLaneModels.LIT_LEVELS), else
-    // the near or far one.
-    _tileVariant(code, level, lit) {
+    // its plain one.
+    _tileVariant(code, lit) {
         if (lit !== null) {
             return (code + lit);
         }
 
-        return (code + LightLaneModels.TRACK_LEVELS[level]);
+        return code;
     }
 
 
-    // The distances of the far variants (art § 4), from the canvas' real width: again when it changes.
-    _updateFarDistances() {
-        const width = this._screen.getCanvas().width;
-        if (width === this._canvasWidth) {
-            return;
-        }
-        this._canvasWidth = width;
-        const focal       = (width / (2 * Math.tan(LightLaneTuning.CAMERA_FOV * Math.PI / LightLanePresentation.HALF_TURN)));
-        this._farLines    = ((focal * LightLaneTuning.LINE_SIZE) / LightLaneTuning.LINE_FAR_PIXELS);
-    }
 
     /**
      * The fine halves: every half tile the runner's light reaches, or soon will, that the camera sees (from
@@ -499,9 +473,6 @@ class LightLanePresentation {
         return ((code === 'PP') ? null : code);
     }
 
-    _isFar(wasFar, distance, threshold) {
-        return ((wasFar) ? (distance > (LightLaneTuning.LINE_NEAR_RATIO * threshold)) : (distance > threshold));
-    }
 
     _acquire(code) {
         const free = this._free.get(code);
@@ -512,11 +483,8 @@ class LightLanePresentation {
         return LightLanePresentation.instance(this._id(code));
     }
 
-    // Back to the pool of its own object (its near variant again).
+    // Back to the pool of its own object.
     _release(view) {
-        if (view.far) {
-            view.instance.setObject(this._id(view.code));
-        }
         view.instance.setRenderLight(1);
         if (!this._free.has(view.code)) {
             this._free.set(view.code, []);
@@ -534,7 +502,7 @@ class LightLanePresentation {
         return id;
     }
 
-    // The screen, the engine on the renderer of the settings, the HUD; the far-variant distances of the canvas.
+    // The screen, the engine on the renderer of the settings, the HUD.
     _buildDisplay() {
         this._rendererCode = lightLaneSettings.getRenderer();
         this._screen       = new ScreenManager('screen', {fullscreen: true, virtualWidth: LightLanePresentation.VIRTUAL_WIDTH, virtualHeight: LightLanePresentation.VIRTUAL_HEIGHT});
@@ -550,7 +518,6 @@ class LightLanePresentation {
         }
         this._hud = new LightLaneHud(this._engine, this._simulation).setBest(this._best).setOnPause(this._onPause).setShieldSource(this._shield);
         this._screen.bindHud(this._hud);
-        this._canvasWidth = 0;
         this._rows.forEach((slot) => {
             slot.row = null;
         });

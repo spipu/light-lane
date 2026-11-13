@@ -134,12 +134,7 @@ LightLaneTuning.COLOR = Object.freeze({
 // --- Lines (art § 4) ---
 LightLaneTuning.LINE_SIZE         = 0.08;
 LightLaneTuning.LINE_SIZE_DECOR   = 0.05;
-LightLaneTuning.LINE_SIZE_FAR     = 0.20;
 LightLaneTuning.LINE_OUTSET       = 0.01;
-// The far variant takes over when a line would be under LINE_FAR_PIXELS on screen, and gives way under
-// LINE_NEAR_RATIO × that distance.
-LightLaneTuning.LINE_FAR_PIXELS   = 1.5;
-LightLaneTuning.LINE_NEAR_RATIO   = 0.9;
 // --- Background: the user's picture of a city (.source/fond.png → assets/lightLane/textures/skyline.jpg) ---
 // Drawn by the engine's sky pass (Engine3d.setSky: before the geometry, by view angle, no depth shading). Its own
 // proportions (user request: not squashed): SKY_SPAN degrees across its width, as many a pixel upwards; the luminous

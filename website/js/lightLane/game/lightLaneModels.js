@@ -1,8 +1,8 @@
 /**
  * The objects built in code (art § 5.2), as Object3dLoader data, and the runner's glTF: loaded inside the loader batch
  * of the run, kept by code. Origin of an object: the centre of its bottom, its front towards −z; a face that glows
- * says so in its data (glow: true). Every object with lines has a far variant (code + LightLaneModels.FAR_SUFFIX) with
- * thicker lines (art § 4). Built with LightLaneObjectBuilder.
+ * says so in its data (glow: true). Lines keep one size at any distance (user requests): the bloom's halo, kept whole
+ * far away, shows them. Built with LightLaneObjectBuilder.
  */
 class LightLaneModels {
     /**
@@ -18,15 +18,14 @@ class LightLaneModels {
         LightLaneModels._load(LightLaneModels.TILE, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, null));
         LightLaneModels._load(LightLaneModels.ROW3, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, null, LightLaneTuning.LANES_3.length));
         LightLaneModels._load(LightLaneModels.TILE_EDGE, LightLaneModels._tileEdge(LightLaneTuning.LINE_SIZE_DECOR));
-        const lines = [LightLaneTuning.LINE_SIZE, LightLaneTuning.LINE_SIZE_FAR];
-        [false, true].forEach((far, i) => {
-            const suffix = ((far) ? LightLaneModels.FAR_SUFFIX : '');
-            LightLaneModels._load(LightLaneModels.HURDLE + suffix, LightLaneModels._hurdle(lines[i]));
-            LightLaneModels._load(LightLaneModels.GATE + suffix, LightLaneModels._gate(lines[i]));
-            for (const code of LightLaneModels.BLOCKS) {
-                LightLaneModels._load(LightLaneModels.blockCode(code) + suffix, LightLaneModels._block(LightLaneTuning.OBSTACLES[code].length, lines[i]));
-            }
-        });
+        // The obstacles: one size of lines at any distance (user request: no sudden change as they come near; the
+        // bloom's halo keeps them visible far away).
+        const line = LightLaneTuning.LINE_SIZE;
+        LightLaneModels._load(LightLaneModels.HURDLE, LightLaneModels._hurdle(line));
+        LightLaneModels._load(LightLaneModels.GATE, LightLaneModels._gate(line));
+        for (const code of LightLaneModels.BLOCKS) {
+            LightLaneModels._load(LightLaneModels.blockCode(code), LightLaneModels._block(LightLaneTuning.OBSTACLES[code].length, line));
+        }
         LightLaneModels._load(LightLaneModels.COIN, LightLaneModels._coin());
         for (const [name, rgb] of Object.entries(LightLaneModels.SHARD_COLORS)) {
             LightLaneModels._load(LightLaneModels.SHARD + name, LightLaneModels._shard(color[rgb]));
@@ -342,9 +341,6 @@ class LightLaneModels {
 }
 
 LightLaneModels.ASSETS     = './assets/lightLane/';
-LightLaneModels.FAR_SUFFIX = 'Far';
-// The track's tiles: one level of lines (index 0 only; the far ones went, user request).
-LightLaneModels.TRACK_LEVELS = Object.freeze(['']);
 LightLaneModels._lod       = false;
 // The codes of the objects built here (load()).
 LightLaneModels.CODES      = [];
