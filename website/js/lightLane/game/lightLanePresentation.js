@@ -369,11 +369,12 @@ class LightLanePresentation {
             const centre = (start + (length / 2));
             if (slot.row !== row) {
                 slot.row  = row;
-                slot.gaps = false;
+                const gaps = lanes.map((lane) => track.gapIn(lane, start));
+                const kind = (i) => ((i < 0) || (i >= lanes.length)) ? null : ((gaps[i] !== null) ? gaps[i] : LightLaneModels.TILE);
+                slot.gaps  = gaps.some((gap) => (gap !== null));
                 lanes.forEach((lane, i) => {
-                    const gap = track.gapIn(lane, start);
-                    slot.gaps     = (slot.gaps || (gap !== null));
-                    slot.codes[i] = ((gap !== null) ? LightLaneModels.gapTileCode(gap) : LightLaneModels.TILE);
+                    // A holed tile has walls only where a neighbour's top flanks its hole.
+                    slot.codes[i] = ((gaps[i] !== null) ? LightLaneModels.gapTileVariant(gaps[i], kind(i - 1), kind(i + 1)) : LightLaneModels.TILE);
                     slot.tiles[i].setObject(this._id(this._tileVariant(slot.codes[i], slot.lit)));
                     slot.tiles[i].placeAt((lane * LightLaneTuning.LANE_WIDTH), y, centre);
                 });

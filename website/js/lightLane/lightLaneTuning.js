@@ -16,6 +16,8 @@ LightLaneTuning.LANES_3        = [-1, 0, 1];
 LightLaneTuning.LANES_5        = [-2, -1, 0, 1, 2];
 LightLaneTuning.TILE_LENGTH    = 10.0;
 LightLaneTuning.TILE_THICKNESS = 0.3;
+// The tiles' tops and walls are a little see-through, the fog showing under them (user request); lines and marks stay opaque.
+LightLaneTuning.TILE_ALPHA     = 0.8;
 // Cross marks on every tile, every TILE_MARK_STEP from its start: they show the run's speed (user request); painted
 // FLOOR_MARK, no glow.
 LightLaneTuning.TILE_MARK_STEP  = 5.0;
@@ -155,6 +157,8 @@ LightLaneTuning.FOG_BEHIND        = 20;
 LightLaneTuning.FOG_AHEAD         = 160;
 LightLaneTuning.FOG_HALF_WIDTH    = 220;
 LightLaneTuning.FOG_TILE          = Object.freeze([60, 30]);
+// The fog's texture darkened by a fifth (user request).
+LightLaneTuning.FOG_COLOR         = Object.freeze([204, 204, 204]);
 
 // --- Background: the user's picture of a city (.source/fond.png → assets/lightLane/textures/skyline.jpg) ---
 // Drawn by the engine's sky pass (Engine3d.setSky: before the geometry, by view angle, no depth shading). Its own
