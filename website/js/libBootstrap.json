@@ -1,9 +1,10 @@
 {
-    "version": "v0.0044",
+    "version": "v0.0046",
     "files": {
         "assets": [
             "/assets/lightLane/models/runner.bin",
             "/assets/lightLane/models/runner.gltf",
+            "/assets/lightLane/textures/skyline.jpg",
             "/lib/oswald/oswald.woff2"
         ],
         "css": [

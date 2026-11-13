@@ -141,30 +141,18 @@ LightLaneTuning.LINE_OUTSET       = 0.01;
 // LINE_NEAR_RATIO × that distance.
 LightLaneTuning.LINE_FAR_PIXELS   = 1.5;
 LightLaneTuning.LINE_NEAR_RATIO   = 0.9;
-// --- Backdrop: the horizon and a simple futuristic city (user requests) ---
-// The depth shading darkens what is far to ≈ 15 % at 130 m and no setting of an object escapes it (the shader clamps
-// the colour first): the backdrop is built at BACKDROP_NEAR / BACKDROP_DISTANCE of its size and drawn BACKDROP_NEAR
-// ahead of the camera, which shows it exactly as large as at BACKDROP_DISTANCE, unshaded; drawn first, the depth then
-// cleared, the scene lies over it. Sizes below are the apparent ones, at BACKDROP_DISTANCE.
-LightLaneTuning.BACKDROP_DISTANCE = 160;
-LightLaneTuning.BACKDROP_NEAR     = 30;
-LightLaneTuning.BACKDROP_HALF     = 330;
-LightLaneTuning.HORIZON_BAND      = 0.5;
-LightLaneTuning.CITY_SEED         = 1982;
-// A city in the spirit of the user's reference (a lone spire on the track's axis, the grid running to it, a low
-// skyline, a blue haze over the horizon), drawn in the game's own shapes. Apparent metres at BACKDROP_DISTANCE; the
-// spire stops under the score (the horizon is 8° under the top of the screen).
-LightLaneTuning.CITY_SPIRE        = Object.freeze({height: 12.5, base: 5.0, tip: 0.25, steps: [[9, 1.6], [6, 2.6], [3.4, 4.2]]});
-LightLaneTuning.CITY_TOWERS       = Object.freeze([[7, 2.4, 7.5], [13, 3.2, 5.0], [21, 4.0, 3.6]]);   // [x from axis, width, height], mirrored
-LightLaneTuning.CITY_LOW_FROM     = 26;
-LightLaneTuning.CITY_LOW_WIDTH    = Object.freeze([4, 14]);
-LightLaneTuning.CITY_LOW_HEIGHT   = Object.freeze([0.8, 3.0]);
-LightLaneTuning.CITY_LOW_GAP      = Object.freeze([0.5, 4]);
-LightLaneTuning.CITY_EDGE         = 0.12;
-LightLaneTuning.CITY_LINE         = Object.freeze([40, 110, 128]);
-LightLaneTuning.CITY_TIP          = Object.freeze([150, 225, 240]);
-// The haze: additive bands over the horizon, [height, colour], stacked into a fading glow.
-LightLaneTuning.CITY_HAZE         = Object.freeze([[1.2, [26, 70, 84]], [3.0, [16, 44, 54]], [6.5, [10, 26, 32]], [11, [6, 15, 19]]]);
+// --- Background: the user's picture of a city (.source/fond.png → assets/lightLane/textures/skyline.jpg) ---
+// Drawn by the engine's sky pass (Engine3d.setSky: before the geometry, by view angle, no depth shading). The
+// horizon sits 8° under the top of the screen: the picture's spire tip (SKY_TIP_ROW) at SKY_TIP_ELEVATION, its
+// city base (SKY_HORIZON_ROW) on the horizon, its width spread over SKY_SPAN degrees; it slides SKY_PARALLAX degrees
+// a metre the camera goes across (user request: it moves slightly with the lane).
+LightLaneTuning.SKY_URL           = 'textures/skyline.jpg';
+LightLaneTuning.SKY_HEIGHT_PX     = 724;
+LightLaneTuning.SKY_HORIZON_ROW   = 668;
+LightLaneTuning.SKY_TIP_ROW       = 324;
+LightLaneTuning.SKY_TIP_ELEVATION = 6;
+LightLaneTuning.SKY_SPAN          = 90;
+LightLaneTuning.SKY_PARALLAX      = 0.75;
 
 // --- Commands (gameplay § 10) ---
 // Gamepad stick: the dominant axis past STICK_TRIGGER makes an order; re-armed once both axes are under STICK_REARM.

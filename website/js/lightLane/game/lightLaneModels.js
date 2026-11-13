@@ -54,7 +54,7 @@ class LightLaneModels {
                 LightLaneModels._load(LightLaneModels.gapTileCode(code) + suffix, LightLaneModels._gapTile(LightLaneTuning.OBSTACLES[code], LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.LINE_SIZE, cells));
             }
         }
-        LightLaneModels._load(LightLaneModels.BACKDROP, LightLaneModels._backdrop());
+        LightLaneModels._skyId = loader.textures().load(LightLaneModels.ASSETS + LightLaneTuning.SKY_URL);
         loader.animatedModels().loadByCode(LightLaneModels.RUNNER, LightLaneModels.ASSETS + 'models/runner.gltf');
     }
 
@@ -72,6 +72,13 @@ class LightLaneModels {
         LightLaneModels.CODES.push(code);
 
         return loader.objects().loadFromData(code, data);
+    }
+
+    /**
+     * @returns {int} the texture id of the background picture
+     */
+    static skyId() {
+        return LightLaneModels._skyId;
     }
 
     /**
@@ -333,73 +340,6 @@ class LightLaneModels {
         return b.data();
     }
 
-    // The backdrop (user requests, after their reference picture): a blue haze over the horizon, the horizon band at
-    // the ground's level, a lone spire on the track's axis on a stepped base, towers in pairs on both sides, a low
-    // skyline along the rest; dark silhouettes edged with dim lines, the spire's tip glowing. Flat, facing the camera;
-    // built at the scale BACKDROP_NEAR / BACKDROP_DISTANCE (LightLaneTuning).
-    static _backdrop() {
-        const color  = LightLaneTuning.COLOR;
-        const k      = (LightLaneTuning.BACKDROP_NEAR / LightLaneTuning.BACKDROP_DISTANCE);
-        const r      = (v) => (v * k);
-        const random = new LightLaneRandom(LightLaneTuning.CITY_SEED);
-        const b      = new LightLaneObjectBuilder();
-        const half   = LightLaneTuning.BACKDROP_HALF;
-        const edge   = LightLaneTuning.CITY_EDGE;
-        const lift   = LightLanePresentation.BACKDROP_LINE_LIFT;
-        // Layers, nearest first: the band, the city's lines, its silhouettes, the haze behind all.
-        const city   = r(LightLanePresentation.BACKDROP_LAYER);
-        const haze   = r(2 * LightLanePresentation.BACKDROP_LAYER);
-        for (const [height, rgb] of LightLaneTuning.CITY_HAZE) {
-            b.polygon([[r(-half), 0, haze], [r(-half), r(height), haze], [r(half), r(height), haze], [r(half), 0, haze]], rgb, false, true);
-        }
-        b.rect(r(-half), 0, r(half), r(LightLaneTuning.HORIZON_BAND), 0, color.HORIZON, true);
-        // A silhouette: a dark polygon of the facade, its outline in dim lines (each edge a thin strip).
-        const shape = (outline, line) => {
-            b.polygon(outline.map(([x, y]) => [r(x), r(y), city]), color.BODY_BOTTOM);
-            for (let i = 0; i < outline.length; i++) {
-                const [xa, ya] = outline[i];
-                const [xb, yb] = outline[(i + 1) % outline.length];
-                if ((ya === 0) && (yb === 0)) {
-                    continue;
-                }
-                const len = Math.hypot((xb - xa), (yb - ya));
-                const nx  = (-(yb - ya) / len) * (edge / 2);
-                const ny  = ((xb - xa) / len) * (edge / 2);
-                // Turned towards the camera (−z), whatever the edge's direction.
-                b.facing([[r(xa - nx), r(ya - ny), city - lift], [r(xa + nx), r(ya + ny), city - lift], [r(xb + nx), r(yb + ny), city - lift], [r(xb - nx), r(yb - ny), city - lift]],
-                    [r(xa), r(ya), (city + 1)], line, true);
-            }
-        };
-        const box = (x0, x1, height, line) => shape([[x0, 0], [x0, height], [x1, height], [x1, 0]], line);
-        // The spire: a tapering needle on a stepped base, its tip glowing.
-        const spire = LightLaneTuning.CITY_SPIRE;
-        for (const [width, height] of spire.steps) {
-            box(-width / 2, width / 2, height, LightLaneTuning.CITY_LINE);
-        }
-        shape([[-spire.base / 2, 0], [-spire.tip / 2, spire.height], [spire.tip / 2, spire.height], [spire.base / 2, 0]], LightLaneTuning.CITY_LINE);
-        b.rect(r(-spire.tip), r(spire.height - 0.6), r(spire.tip), r(spire.height + 0.4), (city - (2 * lift)), LightLaneTuning.CITY_TIP, true);
-        // Towers in pairs.
-        for (const [x, width, height] of LightLaneTuning.CITY_TOWERS) {
-            for (const side of [-1, 1]) {
-                const centre = (side * x);
-                box(centre - (width / 2), centre + (width / 2), height, LightLaneTuning.CITY_LINE);
-            }
-        }
-        // The low skyline, on both sides from CITY_LOW_FROM out.
-        for (const side of [-1, 1]) {
-            let x = LightLaneTuning.CITY_LOW_FROM;
-            while (x < half) {
-                const width  = random.between(...LightLaneTuning.CITY_LOW_WIDTH);
-                const height = random.between(...LightLaneTuning.CITY_LOW_HEIGHT);
-                const x1     = Math.min(half, (x + width));
-                box(Math.min(side * x, side * x1), Math.max(side * x, side * x1), height, LightLaneTuning.CITY_LINE);
-                x = (x1 + random.between(...LightLaneTuning.CITY_LOW_GAP));
-            }
-        }
-
-        return b.data();
-    }
-
     // The line along the right edge of the rightmost lane, alone.
     static _tileEdge(lineSize) {
         const w = (LightLaneTuning.LANE_WIDTH / 2);
@@ -432,7 +372,8 @@ LightLaneModels.TILE       = 'tile';
 LightLaneModels.TILE_EDGE  = 'tileEdge';
 // A whole row of 3 lanes in one tile (user request: no separation between lanes but at a gap).
 LightLaneModels.ROW3       = 'row3';
-LightLaneModels.BACKDROP   = 'backdrop';
+// The background picture's texture id (load()).
+LightLaneModels._skyId     = null;
 LightLaneModels.RUNNER     = 'runner';
 LightLaneModels.HURDLE     = 'hurdle';
 LightLaneModels.GATE       = 'gate';
