@@ -35,6 +35,7 @@ class LightLaneSimulation {
         this._fallSpeed     = 0;
         this._fallForward   = 0;
         this._shield        = false;
+        this._fixedSpeed    = null;
         this._shieldDeaths  = 0;
         this._pending       = [];     // orders received, handed to the next running step
         // Boxes reused every step.
@@ -46,7 +47,8 @@ class LightLaneSimulation {
     /**
      * A new run: everything back to its start, the countdown of a new run.
      *
-     * @param {{tier?: int, seed?: int, track?: object[]|null, shield?: boolean}} options
+     * @param {{tier?: int, seed?: int, track?: object[]|null, shield?: boolean, speed?: number|null}} options - speed: the
+     *        test mode's fixed speed
      */
     newRun(options = {}) {
         const tier          = (options.tier ?? 0);
@@ -63,6 +65,7 @@ class LightLaneSimulation {
         this._accumulator   = 0;
         this._death         = null;
         this._shield        = (options.shield === true);
+        this._fixedSpeed    = ((options.speed === undefined) ? null : options.speed);
         this._shieldDeaths  = 0;
         this._score.reset();
         this._events.clear();
@@ -397,6 +400,11 @@ class LightLaneSimulation {
     }
 
     _updateSpeed(dt) {
+        // The test mode's fixed speed (gameplay § 13).
+        if (this._fixedSpeed !== null) {
+            this._speed = this._fixedSpeed;
+            return;
+        }
         const tier = LightLaneSimulation.tierAt(this._z);
         if (tier !== this._tier) {
             this._tier     = tier;

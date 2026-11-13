@@ -1,6 +1,6 @@
 /**
  * The test mode (gameplay § 13), read once from the address: ?test=<options>, options separated by ",", each "name" or
- * "name:value" (seed, tier, track, script, pilot, shield). Active on the local host only (localhost, 127.0.0.1): on any
+ * "name:value" (seed, tier, track, script, speed, pilot, shield). Active on the local host only (localhost, 127.0.0.1): on any
  * other host, the production included, the parameter is ignored without a word. Never offered by the interface; it lets
  * the runs be checked in the browser without playing: written rows, timed orders, the robot, no death.
  */
@@ -17,6 +17,7 @@ class LightLaneTestMode {
         this._script = null;   // [{time, order}] sorted, or null
         this._pilot  = false;
         this._shield = false;
+        this._speed  = null;   // a fixed speed, m/s, or null
         if (!LightLaneTestMode.LOCAL_HOSTS.includes(hostname)) {
             return;
         }
@@ -75,6 +76,13 @@ class LightLaneTestMode {
         return this._shield;
     }
 
+    /**
+     * @returns {number|null} a fixed speed, m/s (0: the track stands still, to look at it), or null
+     */
+    getSpeed() {
+        return this._speed;
+    }
+
     _read(option) {
         const colon = option.indexOf(':');
         const name  = ((colon < 0) ? option : option.slice(0, colon));
@@ -92,6 +100,12 @@ class LightLaneTestMode {
             case 'script':
                 this._script = value.split('|').filter((entry) => (entry !== '')).map((entry) => LightLaneTestMode._order(entry))
                     .sort((a, b) => (a.time - b.time));
+                break;
+            case 'speed':
+                this._speed = Number(value);
+                if (!Number.isFinite(this._speed) || (this._speed < 0)) {
+                    throw new Error('LightLaneTestMode - bad speed ' + value);
+                }
                 break;
             case 'pilot':
                 this._pilot = true;

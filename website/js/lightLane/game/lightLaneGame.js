@@ -87,7 +87,8 @@ class LightLaneGame {
             tier:   (test.getTier() ?? 0),
             seed:   (test.getSeed() ?? LightLaneRandom.freshSeed()),
             track:  test.getTrack(),
-            shield: test.isShield()
+            shield: test.isShield(),
+            speed:  (test.getSpeed() ?? undefined)
         });
         this._overPending = false;
         this._presentation.newRun();

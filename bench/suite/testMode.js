@@ -36,6 +36,7 @@ class TestModeBench {
         ])));
         this._check('script: sorted by time', (JSON.stringify(mode.getScript()) === JSON.stringify([{time: 1.2, order: 'jump'}, {time: 3, order: 'slide'}])));
         this._check('pilot and shield', (mode.isPilot() && mode.isShield()));
+        this._check('speed: a fixed speed, 0 allowed', (new this._TestMode('localhost', '?test=speed:0').getSpeed() === 0));
         let refused = false;
         try {
             new this._TestMode('localhost', '?test=script:1.0:X');
