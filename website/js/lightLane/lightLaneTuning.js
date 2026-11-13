@@ -80,9 +80,10 @@ LightLaneTuning.AMBIENT               = [255, 255, 255];
 // 255): with it on, the ambient goes down to AMBIENT_LIT and the tiles' tops are cut in cells of TILE_TOP_CELL (the
 // light is computed at the vertices).
 LightLaneTuning.RUNNER_LIGHT_ON       = true;
-// (120, 200, 220) raised by 25 % (user request); a component over 255 is fine: only ambient + lights is clamped.
-LightLaneTuning.RUNNER_LIGHT_COLOR    = [150, 250, 275];
-LightLaneTuning.RUNNER_LIGHT_RANGE    = 1.5;
+// (120, 200, 220) raised by 25 %, then by 50 % (user requests); a component over 255 is fine: only ambient + lights
+// is clamped, so a stronger light mostly widens the part brought to the full painted colour.
+LightLaneTuning.RUNNER_LIGHT_COLOR    = [225, 375, 412];
+LightLaneTuning.RUNNER_LIGHT_RANGE    = 2.0;
 LightLaneTuning.AMBIENT_LIT           = [170, 170, 170];
 LightLaneTuning.TILE_TOP_CELL         = 0.5;
 LightLaneTuning.BACKGROUND            = [10, 20, 24];
@@ -215,3 +216,48 @@ LightLaneTuning.FRAGILE_BLINK_HZ    = 4;
 
 // --- Game over (art § 10) ---
 LightLaneTuning.GAME_OVER_INPUT_LOCK = 0.4;
+
+// --- Sections (generation § 3) ---
+LightLaneTuning.FIRST_SECTION        = 400;
+LightLaneTuning.SECTION_STEP         = 10;
+LightLaneTuning.SECTION_3_MIN        = 250;
+LightLaneTuning.SECTION_3_MAX        = 500;
+LightLaneTuning.SECTION_5_MIN        = 150;
+LightLaneTuning.SECTION_5_MAX        = 300;
+LightLaneTuning.SECTION_5_FROM_TIER  = 2;
+LightLaneTuning.P5_BASE              = 0.35;
+LightLaneTuning.P5_STEP              = 0.05;
+LightLaneTuning.P5_MAX               = 0.60;
+// The first section of 5 lanes: forced at tier 2's start + FIRST_ENCOUNTER, FORCED_5_LENGTH long.
+LightLaneTuning.FORCED_5_LENGTH      = 200;
+// The warning before the outer lanes end: LANE_END_WARN × v ahead of the end (aligned on tiles); the centre's outer
+// lanes (−1, +1) free in the last LANE_END_FREE × v.
+LightLaneTuning.LANE_END_WARN        = 2.5;
+LightLaneTuning.LANE_END_FREE        = 1.2;
+LightLaneTuning.WARN_BLINK_HZ        = 4;
+
+// --- Introduction and first encounters (gameplay § 9.2, generation § 6) ---
+LightLaneTuning.BREATHING            = 150;
+LightLaneTuning.FIRST_ENCOUNTER      = 150;
+LightLaneTuning.INTRO_LENGTH         = 400;
+LightLaneTuning.INTRO_FROM           = 0.3;
+LightLaneTuning.ENCOUNTER_GAP_FACTOR = 1.5;
+LightLaneTuning.FIRST_BONUS_AT       = 230;
+LightLaneTuning.ROW_TRIES            = 8;
+
+// --- Fairness (generation § 8.2) ---
+LightLaneTuning.REACTION             = 0.45;
+LightLaneTuning.JUMP_SPACING_TIER0   = 0.75;
+LightLaneTuning.JUMP_SPACING         = 0.95;
+LightLaneTuning.SLIDE_THEN_JUMP      = 0.70;
+
+// --- Bonuses (generation § 7.1) ---
+LightLaneTuning.BONUS_GAP_EARLY      = Object.freeze([400, 650]);
+LightLaneTuning.BONUS_GAP_LATE       = Object.freeze([550, 900]);
+LightLaneTuning.BONUS_LATE_FROM_TIER = 4;
+LightLaneTuning.BONUS_WEIGHTS        = Object.freeze({double: 25, magnet: 25, shield: 20, boots: 15, flight: 15});
+LightLaneTuning.BONUS_HEIGHT         = 0.9;
+
+// --- Decor zones (generation § 7.3) ---
+LightLaneTuning.ZONE_LENGTH          = 800;
+LightLaneTuning.ZONES                = Object.freeze(['grid', 'hex', 'dots', 'arches']);

@@ -71,6 +71,7 @@ class LightLanePresentation {
         this._rows    = Array.from({length: slots}, () => ({
             row:   null,
             codes: LightLaneTuning.LANES_3.map(() => LightLaneModels.TILE),
+            lit:   false,
             tiles: LightLaneTuning.LANES_3.map(() => LightLanePresentation.instance(this._id(LightLaneModels.TILE))),
             edge:  LightLanePresentation.instance(this._id(LightLaneModels.TILE_EDGE)),
             far:   false
@@ -333,17 +334,19 @@ class LightLanePresentation {
                 lanes.forEach((lane, i) => {
                     const gap = track.gapIn(lane, start);
                     slot.codes[i] = ((gap !== null) ? LightLaneModels.gapTileCode(gap) : LightLaneModels.TILE);
-                    slot.tiles[i].setObject(this._id(slot.codes[i] + ((slot.far) ? LightLaneModels.FAR_SUFFIX : '')));
+                    slot.tiles[i].setObject(this._id(this._tileVariant(slot.codes[i], slot.far, slot.lit)));
                     slot.tiles[i].placeAt((lane * LightLaneTuning.LANE_WIDTH), y, centre);
                 });
                 slot.edge.placeAt((lanes[lanes.length - 1] * LightLaneTuning.LANE_WIDTH), y, centre);
             }
             const far = this._isFar(slot.far, Math.abs(centre - camZ), this._farDecor);
-            if (far !== slot.far) {
+            // Only the tiles the runner's light can reach are cut in cells (art § 2): the others stay cheap.
+            const lit = (LightLaneTuning.RUNNER_LIGHT_ON && (Math.abs(centre - z) < ((length / 2) + this._light.range)));
+            if ((far !== slot.far) || (lit !== slot.lit)) {
                 slot.far = far;
-                const suffix = ((far) ? LightLaneModels.FAR_SUFFIX : '');
-                slot.tiles.forEach((tile, i) => tile.setObject(this._id(slot.codes[i] + suffix)));
-                slot.edge.setObject(this._id(LightLaneModels.TILE_EDGE + suffix));
+                slot.lit = lit;
+                slot.tiles.forEach((tile, i) => tile.setObject(this._id(this._tileVariant(slot.codes[i], far, lit))));
+                slot.edge.setObject(this._id(LightLaneModels.TILE_EDGE + ((far) ? LightLaneModels.FAR_SUFFIX : '')));
             }
             for (const tile of slot.tiles) {
                 engine.drawInstance(tile);
@@ -409,6 +412,15 @@ class LightLanePresentation {
         instance.placeAt(entity.x, ((entity.y - LightLanePresentation.COIN_HALF_HEIGHT) + bob + (LightLaneTuning.COIN_TAKE_RISE * taken)), entity.z);
         instance.setRotation([0, ((LightLaneTuning.COIN_SPIN * this._time) % LightLanePresentation.FULL_TURN), 0]);
         instance.setRenderLight(1 - taken);
+    }
+
+    // A tile's object: the lit one near the runner's light (a plain tile only), else the near or far one.
+    _tileVariant(code, far, lit) {
+        if (lit && (code === LightLaneModels.TILE)) {
+            return (code + LightLaneModels.LIT_SUFFIX);
+        }
+
+        return (code + ((far) ? LightLaneModels.FAR_SUFFIX : ''));
     }
 
     _isFar(wasFar, distance, threshold) {

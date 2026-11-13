@@ -11,7 +11,7 @@ class LightLaneModels {
         const decor = [LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.LINE_SIZE_DECOR_FAR];
         [false, true].forEach((far, i) => {
             const suffix = ((far) ? LightLaneModels.FAR_SUFFIX : '');
-            loader.objects().loadFromData(LightLaneModels.TILE + suffix, LightLaneModels._tile(decor[i]));
+            loader.objects().loadFromData(LightLaneModels.TILE + suffix, LightLaneModels._tile(decor[i], false));
             loader.objects().loadFromData(LightLaneModels.TILE_EDGE + suffix, LightLaneModels._tileEdge(decor[i]));
         });
         const lines = [LightLaneTuning.LINE_SIZE, LightLaneTuning.LINE_SIZE_FAR];
@@ -30,6 +30,8 @@ class LightLaneModels {
         for (const [name, rgb] of Object.entries(LightLaneModels.SHARD_COLORS)) {
             loader.objects().loadFromData(LightLaneModels.SHARD + name, LightLaneModels._shard(color[rgb]));
         }
+        // The tile under the runner's light (its top in cells), used near the runner only.
+        loader.objects().loadFromData(LightLaneModels.TILE + LightLaneModels.LIT_SUFFIX, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, true));
         const horizon = new LightLaneObjectBuilder();
         const half    = (LightLaneTuning.HORIZON_LENGTH / 2);
         horizon.line([-half, 0, 0], [half, 0, 0], LightLaneTuning.LINE_SIZE_DECOR_FAR, color.HORIZON);
@@ -82,27 +84,27 @@ class LightLaneModels {
 
     // A lane's tile: a slab, its top at the origin's height + TILE_THICKNESS, a line along its top left edge, cross
     // lines every TILE_MARK_STEP from its start (they show the speed).
-    static _tile(lineSize) {
+    static _tile(lineSize, lit) {
         const color = LightLaneTuning.COLOR;
         const w     = (LightLaneTuning.LANE_WIDTH / 2);
         const l     = (LightLaneTuning.TILE_LENGTH / 2);
         const h     = LightLaneTuning.TILE_THICKNESS;
         const b     = new LightLaneObjectBuilder();
-        LightLaneModels._slab(b, -l, l);
+        LightLaneModels._slab(b, -l, l, lit);
         b.line([-w, h, -l], [-w, h, l], lineSize, color.LINE_DIM);
         LightLaneModels._marks(b, -l, l);
 
         return b.data();
     }
 
-    // A slab of a tile from z0 to z1; with the runner's light on, its top cut in cells of TILE_TOP_CELL so the light,
-    // computed at the vertices, shows on it.
-    static _slab(b, z0, z1) {
+    // A slab of a tile from z0 to z1; lit (the runner's light near it), its top cut in cells of TILE_TOP_CELL so the
+    // light, computed at the vertices, shows on it.
+    static _slab(b, z0, z1, lit = false) {
         const color = LightLaneTuning.COLOR;
         const w     = (LightLaneTuning.LANE_WIDTH / 2);
         const h     = LightLaneTuning.TILE_THICKNESS;
         const faces = {top: color.FLOOR_TOP, side: color.BODY_SIDE, bottom: color.BODY_BOTTOM};
-        if (!LightLaneTuning.RUNNER_LIGHT_ON) {
+        if (!lit) {
             b.box([-w, 0, z0], [w, h, z1], faces);
             return;
         }
@@ -264,6 +266,7 @@ LightLaneModels.ASSETS     = './assets/lightLane/';
 // The slab under a celled top stops this short of it (its own top stays hidden under the cells).
 LightLaneModels.TOP_INSET  = 0.001;
 LightLaneModels.FAR_SUFFIX = 'Far';
+LightLaneModels.LIT_SUFFIX = 'Lit';
 LightLaneModels.TILE       = 'tile';
 LightLaneModels.TILE_EDGE  = 'tileEdge';
 LightLaneModels.HORIZON    = 'horizon';
