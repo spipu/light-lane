@@ -241,6 +241,18 @@ class LightLaneModels {
         return b.data();
     }
 
+    // A flat glowing DANGER strip in the plane x from (y, z) a to b, `size` wide, facing the side `side` (−1 left, +1
+    // right) only.
+    static _sideStrip(b, x, a, c, size, side) {
+        const dy  = (c[0] - a[0]);
+        const dz  = (c[1] - a[1]);
+        const len = Math.hypot(dy, dz);
+        const ny  = ((-dz / len) * (size / 2));
+        const nz  = ((dy / len) * (size / 2));
+        b.facing([[x, a[0] - ny, a[1] - nz], [x, a[0] + ny, a[1] + nz], [x, c[0] + ny, c[1] + nz], [x, c[0] - ny, c[1] - nz]],
+            [x - side, a[0], a[1]], LightLaneTuning.COLOR.DANGER, true);
+    }
+
     // A red cross (LETHAL, glowing) in the plane z, over the rectangle (x0, y0) – (x1, y1): the way that is closed
     // (user request: one did not see where an obstacle cannot be passed).
     static _cross(b, x0, y0, x1, y1, z, lineSize) {
@@ -249,8 +261,8 @@ class LightLaneModels {
         b.bar([x1, y0, at], [x0, y1, at], lineSize, LightLaneTuning.COLOR.LETHAL, [0, 0, -1]);
     }
 
-    // A block 1.80 × 3.20 × L, its vertical corners cut at 45°; DANGER on the top edges, the front vertical edges, the
-    // front bottom edge and a cross on the front face.
+    // A block 1.80 × 3.20 × L, its vertical corners cut at 45°, drawn by its DANGER edges only; a red cross on its
+    // front face, orange crosses along its sides.
     static _block(length, lineSize) {
         const color = LightLaneTuning.COLOR;
         const w     = 0.90;
@@ -259,18 +271,34 @@ class LightLaneModels {
         const l     = (length / 2);
         const o     = (LightLaneTuning.LINE_OUTSET + (lineSize / 2));
         const b     = new LightLaneObjectBuilder();
-        b.prism([[-w, -l + c], [-w, l - c], [-w + c, l], [w - c, l], [w, l - c], [w, -l + c], [w - c, -l], [-w + c, -l]], 0, h,
-            {top: color.BODY_TOP, side: color.BODY_SIDE, bottom: null});
+        // Drawn by its edges only (user request: no big dark faces): the outline of its top and of its bottom, its
+        // vertical edges at the front and the back.
         const line = (from, to, normal) => b.bar(from, to, lineSize, color.DANGER, normal);
-        line([-w - o, h + o, -l + c], [-w - o, h + o, l - c], [-1, 1, 0]);
-        line([w + o, h + o, -l + c], [w + o, h + o, l - c], [1, 1, 0]);
-        line([-w + c, h + o, -l - o], [w - c, h + o, -l - o], [0, 1, -1]);
-        line([-w + c, h + o, l + o], [w - c, h + o, l + o], [0, 1, 1]);
-        line([-w + c, 0, -l - o], [-w + c, h, -l - o], [0, 0, -1]);
-        line([w - c, 0, -l - o], [w - c, h, -l - o], [0, 0, -1]);
-        line([-w + c, o, -l - o], [w - c, o, -l - o], [0, 0, -1]);
-        // Neither over nor under it: its front cross in red.
+        for (const [y, up] of [[h + o, 1], [o, 0]]) {
+            line([-w - o, y, -l + c], [-w - o, y, l - c], [-1, up, 0]);
+            line([w + o, y, -l + c], [w + o, y, l - c], [1, up, 0]);
+            line([-w + c, y, -l - o], [w - c, y, -l - o], [0, up, -1]);
+            line([-w + c, y, l + o], [w - c, y, l + o], [0, up, 1]);
+        }
+        for (const [z, toward] of [[-l - o, -1], [l + o, 1]]) {
+            line([-w + c, 0, z], [-w + c, h, z], [0, 0, toward]);
+            line([w - c, 0, z], [w - c, h, z], [0, 0, toward]);
+        }
+        // Neither over nor under it: its front cross in red. Its sides cannot be entered either (a stumble): orange
+        // crosses along them, about square (user request: crosses rather than full faces).
         LightLaneModels._cross(b, (-w + c), 0.1, (w - c), (h - 0.1), -l, lineSize);
+        const count = Math.max(1, Math.round((2 * (l - c)) / h));
+        const step  = ((2 * (l - c)) / count);
+        for (const side of [-1, 1]) {
+            const x = (side * (w + o));
+            for (let k = 0; k < count; k++) {
+                const z0 = (-l + c + (k * step) + LightLaneModels.SIDE_CROSS_INSET);
+                const z1 = (-l + c + ((k + 1) * step) - LightLaneModels.SIDE_CROSS_INSET);
+                // Flat strips facing out: the crosses of the far side, facing away, are not drawn through the block.
+                LightLaneModels._sideStrip(b, x, [0.1, z0], [h - 0.1, z1], lineSize, side);
+                LightLaneModels._sideStrip(b, x, [0.1, z1], [h - 0.1, z0], lineSize, side);
+            }
+        }
 
         return b.data();
     }
@@ -341,6 +369,8 @@ class LightLaneModels {
 }
 
 LightLaneModels.ASSETS     = './assets/lightLane/';
+// The crosses along a block's sides stop this short of each other.
+LightLaneModels.SIDE_CROSS_INSET = 0.15;
 LightLaneModels._lod       = false;
 // The codes of the objects built here (load()).
 LightLaneModels.CODES      = [];
