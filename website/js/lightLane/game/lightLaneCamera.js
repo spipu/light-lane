@@ -74,6 +74,18 @@ class LightLaneCamera {
         return this;
     }
 
+    getX() {
+        return this._x;
+    }
+
+    getY() {
+        return this._y;
+    }
+
+    getZ() {
+        return this._z;
+    }
+
     static _height(feet) {
         return Math.max((LightLaneTuning.CAMERA_HEIGHT_BASE + (LightLaneTuning.CAMERA_HEIGHT_FEET * feet)), (feet + LightLaneTuning.CAMERA_ABOVE_FEET));
     }

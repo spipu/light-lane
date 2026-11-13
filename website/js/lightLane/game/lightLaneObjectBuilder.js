@@ -189,6 +189,21 @@ class LightLaneObjectBuilder {
         return this.polygon(this._outward(corners, inside), color, glow, blendAdd);
     }
 
+    /**
+     * A flat rectangle in the plane z, facing −z (the camera, which looks ahead).
+     *
+     * @param {number}   x0
+     * @param {number}   y0
+     * @param {number}   x1
+     * @param {number}   y1
+     * @param {number}   z
+     * @param {number[]} color
+     * @param {boolean}  glow
+     */
+    rect(x0, y0, x1, y1, z, color, glow = false) {
+        return this.polygon([[x0, y0, z], [x0, y1, z], [x1, y1, z], [x1, y0, z]], color, glow);
+    }
+
     data() {
         return {points: this._points, faces: this._faces};
     }

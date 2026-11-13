@@ -34,7 +34,7 @@ class LightLanePresentation {
         this._fragileShown = false;
         this._time         = 0;
         this._rows         = [];      // pool slots: {row, codes: string[], tiles: Instance[], edge: Instance, far}
-        this._horizon      = null;
+        this._backdrop     = null;
         this._farDecor     = Infinity;
         this._farLines     = Infinity;
         this._ids          = new Map();   // object code → id
@@ -79,7 +79,7 @@ class LightLanePresentation {
             edge:  LightLanePresentation.instance(this._id(LightLaneModels.TILE_EDGE)),
             far:   false
         }));
-        this._horizon = LightLanePresentation.instance(this._id(LightLaneModels.HORIZON));
+        this._backdrop = LightLanePresentation.instance(this._id(LightLaneModels.BACKDROP));
         this._effects.bind();
         this._buildDisplay();
 
@@ -307,6 +307,7 @@ class LightLanePresentation {
         engine.drawInit();
         this._camera.setView(engine, this._effects.offset);
         engine.lightsCalculatePosition();
+        this._drawBackdrop();
         this._drawTrack();
         this._drawEntities();
         if (!this._hidden) {
@@ -360,8 +361,16 @@ class LightLanePresentation {
             }
             engine.drawInstance(slot.edge);
         }
-        this._horizon.placeAt(0, LightLaneTuning.HORIZON_Y, (z + LightLaneTuning.HORIZON_AHEAD));
-        engine.drawInstance(this._horizon);
+    }
+
+    // The backdrop at BACKDROP_NEAR ahead of the camera, scaled down as much (LightLaneTuning): seen as large as at
+    // BACKDROP_DISTANCE, its ground on the horizon, its parallax across kept; then the depth cleared, the scene over it.
+    _drawBackdrop() {
+        const k   = (LightLaneTuning.BACKDROP_NEAR / LightLaneTuning.BACKDROP_DISTANCE);
+        const cam = this._camera;
+        this._backdrop.placeAt((cam.getX() * (1 - k)), (cam.getY() * (1 - k)), (cam.getZ() + LightLaneTuning.BACKDROP_NEAR));
+        this._engine.drawInstance(this._backdrop);
+        this._engine.clearDepth();
     }
 
     // One instance per element of the track, made or given back as the stream goes.
@@ -509,5 +518,8 @@ LightLanePresentation.COIN_HALF_HEIGHT = 0.16;
 LightLanePresentation.BOB_PHASE_STEP  = 1.7;
 // Rotation about z that leans the runner towards a move to the right (Instance.setRotation's sign).
 LightLanePresentation.LEAN_SIGN       = -1;
+// The city's facades stand this far (apparent metres) behind the horizon band, its lines this much before them.
+LightLanePresentation.BACKDROP_LAYER     = 2;
+LightLanePresentation.BACKDROP_LINE_LIFT = 0.01;
 // The bloom works with the WebGL renderer only.
 LightLanePresentation.BLOOM_RENDERER  = 'webgl';

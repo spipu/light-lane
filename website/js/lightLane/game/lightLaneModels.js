@@ -40,10 +40,7 @@ class LightLaneModels {
             LightLaneModels._load(LightLaneModels.gapTileCode(code) + LightLaneModels.LIT_SUFFIX, LightLaneModels._gapTile(spec, LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.LINE_SIZE, LightLaneTuning.TILE_TOP_CELL));
             LightLaneModels._load(LightLaneModels.gapTileCode(code) + LightLaneModels.MID_SUFFIX, LightLaneModels._gapTile(spec, LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.LINE_SIZE, LightLaneTuning.TILE_MID_CELL));
         }
-        const horizon = new LightLaneObjectBuilder();
-        const half    = (LightLaneTuning.HORIZON_LENGTH / 2);
-        horizon.line([-half, 0, 0], [half, 0, 0], LightLaneTuning.LINE_SIZE_DECOR_FAR, color.HORIZON);
-        LightLaneModels._load(LightLaneModels.HORIZON, horizon.data());
+        LightLaneModels._load(LightLaneModels.BACKDROP, LightLaneModels._backdrop());
         loader.animatedModels().loadByCode(LightLaneModels.RUNNER, LightLaneModels.ASSETS + 'models/runner.gltf');
     }
 
@@ -170,36 +167,50 @@ class LightLaneModels {
         b.setFloor(false);
     }
 
-    // Bar 1.70 × 0.25 × 0.30 on two feet 0.10 × 0.65 × 0.30; the bar's top edges and the feet's front edges in DANGER.
+    // Bar 1.70 × 0.25 × 0.30 from 0.65 to 0.90 m on two feet 0.10 wide at x ±0.85, drawn by its lines only (user
+    // request: no dark faces one hardly sees): the bar's four long edges and the feet's front edges in DANGER.
     static _hurdle(lineSize) {
         const color = LightLaneTuning.COLOR;
-        const body  = {top: color.BODY_TOP, side: color.BODY_SIDE, bottom: color.BODY_BOTTOM};
         const d     = (LightLaneTuning.OBSTACLES.H.length / 2);
         const b     = new LightLaneObjectBuilder();
-        b.box([-0.85, 0.65, -d], [0.85, 0.90, d], body);
         for (const side of [-1, 1]) {
-            b.box([(side * 0.85) - 0.05, 0, -d], [(side * 0.85) + 0.05, 0.65, d], body);
             b.line([side * 0.85, 0, -d], [side * 0.85, 0.65, -d], lineSize, color.DANGER, [side, 0, -1]);
         }
-        b.line([-0.85, 0.90, -d], [0.85, 0.90, -d], lineSize, color.DANGER, [0, 1, -1]);
-        b.line([-0.85, 0.90, d], [0.85, 0.90, d], lineSize, color.DANGER, [0, 1, 1]);
+        for (const [y, up] of [[0.90, 1], [0.65, -1]]) {
+            b.line([-0.85, y, -d], [0.85, y, -d], lineSize, color.DANGER, [0, up, -1]);
+            b.line([-0.85, y, d], [0.85, y, d], lineSize, color.DANGER, [0, up, 1]);
+        }
+        // No way under it: a red cross between its feet, under the bar.
+        LightLaneModels._cross(b, -0.70, 0.08, 0.70, 0.58, -d, lineSize);
 
         return b.data();
     }
 
-    // Beam 1.90 × 0.40 × 0.30 from 1.05 to 1.45 m, posts 0.08 × 3.0 at x ±1.02 (LINE_DIM); the beam's low edges DANGER.
+    // Beam 1.90 × 0.40 × 0.30 from 1.05 to 1.45 m, drawn by its lines only (user request: no dark faces one hardly
+    // sees): its four long edges in DANGER; posts 0.08 × 3.0 at x ±1.02 in LINE_DIM.
     static _gate(lineSize) {
         const color = LightLaneTuning.COLOR;
         const d     = (LightLaneTuning.OBSTACLES.P.length / 2);
         const b     = new LightLaneObjectBuilder();
-        b.box([-0.95, 1.05, -d], [0.95, 1.45, d], {top: color.BODY_TOP, side: color.BODY_SIDE, bottom: color.BODY_BOTTOM});
         for (const side of [-1, 1]) {
-            b.box([(side * 1.02) - 0.04, 0, -0.04], [(side * 1.02) + 0.04, 3.0, 0.04], {top: color.LINE_DIM, side: color.LINE_DIM, bottom: color.LINE_DIM}, true);
+            b.box([(side * 1.02) - 0.04, 0, -0.04], [(side * 1.02) + 0.04, 3.0, 0.04], {top: color.LINE_DIM, side: color.LINE_DIM, bottom: null}, true);
         }
-        b.line([-0.95, 1.05, -d], [0.95, 1.05, -d], lineSize, color.DANGER, [0, -1, -1]);
-        b.line([-0.95, 1.05, d], [0.95, 1.05, d], lineSize, color.DANGER, [0, -1, 1]);
+        for (const [y, up] of [[1.05, -1], [1.45, 1]]) {
+            b.line([-0.95, y, -d], [0.95, y, -d], lineSize, color.DANGER, [0, up, -1]);
+            b.line([-0.95, y, d], [0.95, y, d], lineSize, color.DANGER, [0, up, 1]);
+        }
+        // No way over it: a red cross between its posts, above the beam.
+        LightLaneModels._cross(b, -0.85, 1.60, 0.85, 2.85, -d, lineSize);
 
         return b.data();
+    }
+
+    // A red cross (LETHAL, glowing) in the plane z, over the rectangle (x0, y0) – (x1, y1): the way that is closed
+    // (user request: one did not see where an obstacle cannot be passed).
+    static _cross(b, x0, y0, x1, y1, z, lineSize) {
+        const at = (z - LightLaneTuning.LINE_OUTSET - (lineSize / 2));
+        b.bar([x0, y0, at], [x1, y1, at], lineSize, LightLaneTuning.COLOR.LETHAL, [0, 0, -1]);
+        b.bar([x1, y0, at], [x0, y1, at], lineSize, LightLaneTuning.COLOR.LETHAL, [0, 0, -1]);
     }
 
     // A block 1.80 × 3.20 × L, its vertical corners cut at 45°; DANGER on the top edges, the front vertical edges, the
@@ -222,8 +233,8 @@ class LightLaneModels {
         line([-w + c, 0, -l - o], [-w + c, h, -l - o], [0, 0, -1]);
         line([w - c, 0, -l - o], [w - c, h, -l - o], [0, 0, -1]);
         line([-w + c, o, -l - o], [w - c, o, -l - o], [0, 0, -1]);
-        line([-w + c, 0.1, -l - o], [w - c, h - 0.1, -l - o], [0, 0, -1]);
-        line([w - c, 0.1, -l - o], [-w + c, h - 0.1, -l - o], [0, 0, -1]);
+        // Neither over nor under it: its front cross in red.
+        LightLaneModels._cross(b, (-w + c), 0.1, (w - c), (h - 0.1), -l, lineSize);
 
         return b.data();
     }
@@ -281,6 +292,73 @@ class LightLaneModels {
         return b.data();
     }
 
+    // The backdrop (user requests, after their reference picture): a blue haze over the horizon, the horizon band at
+    // the ground's level, a lone spire on the track's axis on a stepped base, towers in pairs on both sides, a low
+    // skyline along the rest; dark silhouettes edged with dim lines, the spire's tip glowing. Flat, facing the camera;
+    // built at the scale BACKDROP_NEAR / BACKDROP_DISTANCE (LightLaneTuning).
+    static _backdrop() {
+        const color  = LightLaneTuning.COLOR;
+        const k      = (LightLaneTuning.BACKDROP_NEAR / LightLaneTuning.BACKDROP_DISTANCE);
+        const r      = (v) => (v * k);
+        const random = new LightLaneRandom(LightLaneTuning.CITY_SEED);
+        const b      = new LightLaneObjectBuilder();
+        const half   = LightLaneTuning.BACKDROP_HALF;
+        const edge   = LightLaneTuning.CITY_EDGE;
+        const lift   = LightLanePresentation.BACKDROP_LINE_LIFT;
+        // Layers, nearest first: the band, the city's lines, its silhouettes, the haze behind all.
+        const city   = r(LightLanePresentation.BACKDROP_LAYER);
+        const haze   = r(2 * LightLanePresentation.BACKDROP_LAYER);
+        for (const [height, rgb] of LightLaneTuning.CITY_HAZE) {
+            b.polygon([[r(-half), 0, haze], [r(-half), r(height), haze], [r(half), r(height), haze], [r(half), 0, haze]], rgb, false, true);
+        }
+        b.rect(r(-half), 0, r(half), r(LightLaneTuning.HORIZON_BAND), 0, color.HORIZON, true);
+        // A silhouette: a dark polygon of the facade, its outline in dim lines (each edge a thin strip).
+        const shape = (outline, line) => {
+            b.polygon(outline.map(([x, y]) => [r(x), r(y), city]), color.BODY_BOTTOM);
+            for (let i = 0; i < outline.length; i++) {
+                const [xa, ya] = outline[i];
+                const [xb, yb] = outline[(i + 1) % outline.length];
+                if ((ya === 0) && (yb === 0)) {
+                    continue;
+                }
+                const len = Math.hypot((xb - xa), (yb - ya));
+                const nx  = (-(yb - ya) / len) * (edge / 2);
+                const ny  = ((xb - xa) / len) * (edge / 2);
+                // Turned towards the camera (−z), whatever the edge's direction.
+                b.facing([[r(xa - nx), r(ya - ny), city - lift], [r(xa + nx), r(ya + ny), city - lift], [r(xb + nx), r(yb + ny), city - lift], [r(xb - nx), r(yb - ny), city - lift]],
+                    [r(xa), r(ya), (city + 1)], line, true);
+            }
+        };
+        const box = (x0, x1, height, line) => shape([[x0, 0], [x0, height], [x1, height], [x1, 0]], line);
+        // The spire: a tapering needle on a stepped base, its tip glowing.
+        const spire = LightLaneTuning.CITY_SPIRE;
+        for (const [width, height] of spire.steps) {
+            box(-width / 2, width / 2, height, LightLaneTuning.CITY_LINE);
+        }
+        shape([[-spire.base / 2, 0], [-spire.tip / 2, spire.height], [spire.tip / 2, spire.height], [spire.base / 2, 0]], LightLaneTuning.CITY_LINE);
+        b.rect(r(-spire.tip), r(spire.height - 0.6), r(spire.tip), r(spire.height + 0.4), (city - (2 * lift)), LightLaneTuning.CITY_TIP, true);
+        // Towers in pairs.
+        for (const [x, width, height] of LightLaneTuning.CITY_TOWERS) {
+            for (const side of [-1, 1]) {
+                const centre = (side * x);
+                box(centre - (width / 2), centre + (width / 2), height, LightLaneTuning.CITY_LINE);
+            }
+        }
+        // The low skyline, on both sides from CITY_LOW_FROM out.
+        for (const side of [-1, 1]) {
+            let x = LightLaneTuning.CITY_LOW_FROM;
+            while (x < half) {
+                const width  = random.between(...LightLaneTuning.CITY_LOW_WIDTH);
+                const height = random.between(...LightLaneTuning.CITY_LOW_HEIGHT);
+                const x1     = Math.min(half, (x + width));
+                box(Math.min(side * x, side * x1), Math.max(side * x, side * x1), height, LightLaneTuning.CITY_LINE);
+                x = (x1 + random.between(...LightLaneTuning.CITY_LOW_GAP));
+            }
+        }
+
+        return b.data();
+    }
+
     // The line along the right edge of the rightmost lane, alone.
     static _tileEdge(lineSize) {
         const w = (LightLaneTuning.LANE_WIDTH / 2);
@@ -301,7 +379,7 @@ LightLaneModels.LIT_SUFFIX = 'Lit';
 LightLaneModels.MID_SUFFIX = 'Mid';
 LightLaneModels.TILE       = 'tile';
 LightLaneModels.TILE_EDGE  = 'tileEdge';
-LightLaneModels.HORIZON    = 'horizon';
+LightLaneModels.BACKDROP   = 'backdrop';
 LightLaneModels.RUNNER     = 'runner';
 LightLaneModels.HURDLE     = 'hurdle';
 LightLaneModels.GATE       = 'gate';
