@@ -28,6 +28,10 @@ class LightLaneGame {
         // The pause menu was at its root on the previous frame: an Escape that has just closed the options (the
         // socle closes them on keydown) must not also leave the pause.
         this._pauseAtRoot     = false;
+        this._best            = 0;
+        this._overDisplay     = null;
+        this._overModal       = null;
+        this._overPending     = false;   // the run is over, its score being saved
         this._animateCallback = (timestamp) => this._guard(this._animate, timestamp);
         this._onVisibility    = () => this._guard(this._visibilityChanged);
     }
@@ -54,6 +58,7 @@ class LightLaneGame {
     }
 
     _begin(best) {
+        this._best = best;
         this._presentation.show(best, () => this._guard(this._togglePause));
         this._controls = new LightLaneControls(this._presentation.getDisplay());
         this._sampler  = new LightLaneCommandSampler(this._controls, this._testMode.getScript());
@@ -63,11 +68,28 @@ class LightLaneGame {
         // Played with a gamepad, the screen gets no touch to keep it awake.
         new ScreenWakeLock().init();
         this._newRun();
+        // The test mode (local host only) reaches the run from the console and the browser checks.
+        if (this._testMode.isActive()) {
+            window[LightLaneGame.TEST_HANDLE] = this;
+            this._presentation.setShieldSource((this._testMode.isShield()) ? () => this._simulation.getShieldDeaths() : null);
+        }
         requestAnimationFrame(this._animateCallback);
     }
 
+    // The test mode's view of the run (gameplay § 13): read only.
+    getSimulation() {
+        return this._simulation;
+    }
+
     _newRun() {
-        this._simulation.newRun(this._testMode.getTier() ?? 0);
+        const test = this._testMode;
+        this._simulation.newRun({
+            tier:   (test.getTier() ?? 0),
+            seed:   (test.getSeed() ?? LightLaneRandom.freshSeed()),
+            track:  test.getTrack(),
+            shield: test.isShield()
+        });
+        this._overPending = false;
         this._presentation.newRun();
         this._sampler.restart();
         this._presentation.getEngine().resetDeltaClock();
@@ -79,6 +101,9 @@ class LightLaneGame {
         document.removeEventListener('visibilitychange', this._onVisibility);
         if (this._pauseModal !== null) {
             this._closePause();
+        }
+        if (this._overModal !== null) {
+            this._closeGameOver();
         }
         this._presentation.teardown();
         if (this._controls !== null) {
@@ -93,7 +118,8 @@ class LightLaneGame {
     // From the root of the pause only, as it was on the previous frame: the stacked options handle Escape as one step
     // back.
     _togglePause() {
-        if (!this._running) {
+        const state = this._simulation.getState();
+        if (!this._running || ((state !== LightLaneSimulation.RUNNING) && (state !== LightLaneSimulation.COUNTDOWN))) {
             return;
         }
         if (!this._paused) {
@@ -151,8 +177,52 @@ class LightLaneGame {
     // A hidden page (another tab, the phone locked) pauses the run (tech § 3.1).
     _visibilityChanged() {
         if (this._running && !this._paused && (document.visibilityState === 'hidden')) {
-            this._enterPause();
+            this._togglePause();
         }
+    }
+
+    // --- Game over ---
+
+    // The run into the 10 best scores (if it enters them), then the modal with its rank (gameplay § 12).
+    _gameOver() {
+        const simulation = this._simulation;
+        const run        = {score: simulation.getScore().getScore(), coins: simulation.getScore().getCoins(), distance: Math.floor(simulation.getDistance())};
+        this._overPending = true;
+        this._controls.setVirtualPadVisible(false);
+        lightLaneScores.add(run).catch((error) => {
+            console.warn('LightLaneGame - score not saved: ' + error.message);
+            return null;
+        }).then((entry) => this._guard(this._showGameOver, {run: run, entry: entry}));
+    }
+
+    _showGameOver(result) {
+        if (!this._running || !this._overPending) {
+            return;
+        }
+        this._best        = Math.max(this._best, result.run.score);
+        this._overDisplay = new AppMenuDisplay('screen').init(true);
+        this._overModal   = new LightLaneGameOverModal(this._overDisplay)
+            .setOnReplay(() => this._guard(this._replay))
+            .setOnScores(() => {
+                this._teardown();
+                this._navigator.endGameToScores((result.entry !== null) ? result.entry.id : null);
+            })
+            .setOnQuit(() => this.quit())
+            .show(result.run, ((result.entry !== null) ? result.entry.rank : null), this._best);
+    }
+
+    _replay() {
+        this._closeGameOver();
+        this._presentation.getHud().setBest(this._best);
+        this._controls.applySettings().setVirtualPadVisible(true);
+        this._newRun();
+    }
+
+    _closeGameOver() {
+        this._overModal.close();
+        this._overDisplay.destroy();
+        this._overModal   = null;
+        this._overDisplay = null;
     }
 
     // --- Frames ---
@@ -174,7 +244,8 @@ class LightLaneGame {
             return;
         }
         this._pauseAtRoot = (this._paused && this._pauseModal.isAtRoot());
-        this._presentation.getHud().setPauseButtonShown(this._controls.getDevice() !== LightLaneSettings.DEVICE_VIRTUAL_PAD);
+        const playing = ((this._simulation.getState() === LightLaneSimulation.RUNNING) || (this._simulation.getState() === LightLaneSimulation.COUNTDOWN));
+        this._presentation.getHud().setPauseButtonShown(playing && (this._controls.getDevice() !== LightLaneSettings.DEVICE_VIRTUAL_PAD));
         if (this._paused) {
             this._presentation.present(0, true, true);
             requestAnimationFrame(this._animateCallback);
@@ -183,13 +254,22 @@ class LightLaneGame {
         const simulation = this._simulation;
         if (simulation.getState() === LightLaneSimulation.RUNNING) {
             this._sampler.sample(simulation.getRunTime(), this._orders);
+        } else if (this._overModal !== null) {
+            // The jump order plays again (art § 10).
+            if (this._sampler.sample(simulation.getRunTime(), this._orders).includes(LightLaneCommandSampler.JUMP)) {
+                this._overModal.replay();
+            }
+            this._orders.length = 0;
         } else {
             this._sampler.discard();
             this._orders.length = 0;
         }
         const resuming = ((simulation.getState() === LightLaneSimulation.COUNTDOWN) && !simulation.isNewRun());
         simulation.advance(dt, this._orders);
-        this._presentation.present(dt, resuming, false);
+        this._presentation.present(dt, resuming, (this._overModal !== null));
+        if ((simulation.getState() === LightLaneSimulation.GAME_OVER) && !this._overPending && (this._overModal === null)) {
+            this._gameOver();
+        }
 
         requestAnimationFrame(this._animateCallback);
     }
@@ -206,3 +286,5 @@ class LightLaneGame {
 }
 
 LightLaneGame.FROZEN_DISPLAY_CLASS = 'light-lane-frozen';
+// window property of the run under the test mode.
+LightLaneGame.TEST_HANDLE          = 'lightLaneTest';

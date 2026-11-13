@@ -27,7 +27,7 @@ const SOURCES     = [
 const RUNNER_JOINTS    = ['pelvis', 'torso', 'head', 'upperArmLeft', 'forearmLeft', 'upperArmRight', 'forearmRight',
     'thighLeft', 'shinLeft', 'footLeft', 'thighRight', 'shinRight', 'footRight'];
 // art § 6.2: the keyed clips' durations; idle and run last one captured cycle.
-const RUNNER_CLIPS     = {idle: null, run: null, jump: 0.75, slide: 0.70, laneLeft: 0.16, laneRight: 0.16, stumble: 0.60, fall: 0.80, flight: 1.0};
+const RUNNER_CLIPS     = {idle: null, run: null, jump: 0.75, slide: 0.70, stumble: 0.60, fall: 0.80, flight: 1.0};
 const RUNNER_TRIANGLES = 3000;
 const DURATION_EPSILON = 1e-6;
 

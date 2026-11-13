@@ -1,0 +1,109 @@
+/**
+ * Collision suite (gameplay § 4, § 5): the whole simulation on written rows (the test mode's track), orders given at
+ * a z, as the browser plays them; each case ends on the expected outcome: through, stumble, or the death expected.
+ */
+
+const {load, Checker} = require('../lib/gameContext.js');
+
+function run() {
+    const game       = load();
+    const Simulation = game.get('LightLaneSimulation');
+    const Tuning     = game.get('LightLaneTuning');
+    const c          = new Checker();
+    const step       = Tuning.STEP_SECONDS;
+    const row        = (id) => ({id: id, mirror: false, offset: 0});
+
+    /**
+     * Plays a run on the rows until zEnd or its end: orders at z ({z, order}), returns what happened.
+     */
+    const play = (rows, orders, zEnd) => {
+        const sim = new Simulation().newRun({seed: 1, track: rows.map(row)});
+        const out = [];
+        let next  = 0;
+        let stumbles = 0;
+        let maxStep  = 200000;
+        while ((sim.getState() !== Simulation.GAME_OVER) && (sim.getZ() < zEnd) && (maxStep-- > 0)) {
+            out.length = 0;
+            if ((sim.getState() === Simulation.RUNNING) && (next < orders.length) && (sim.getZ() >= orders[next].z)) {
+                out.push(orders[next++].order);
+            }
+            sim.advance(step, out);
+            const events = sim.getEvents();
+            for (let i = 0; i < events.getCount(); i++) {
+                if (events.get(i).type === 'stumble') {
+                    stumbles++;
+                }
+            }
+            events.clear();
+        }
+        return {death: sim.getDeath(), stumbles: stumbles, z: sim.getZ(), coins: sim.getScore().getCoins(), sim: sim};
+    };
+    const front = (sim, kind) => sim.getTrack().getActive().find((e) => (e.kind === kind));
+
+    // Hurdle in the centre (S2, its front at 60 m): run into it, jump in its window, jump too early, land on it.
+    c.check('hurdle, no order: shock', (play(['S2'], [], 80).death === 'shock'));
+    c.check('hurdle, jump in its window: through', (play(['S2'], [{z: 56, order: 'jump'}], 80).death === null));
+    c.check('hurdle, jump far too early: shock', (play(['S2'], [{z: 50, order: 'jump'}], 80).death === 'shock'));
+    const landed = play(['S2'], [{z: 53.3, order: 'jump'}], 80);
+    c.check('hurdle, coming down on it: stumble, alive', ((landed.death === null) && (landed.stumbles === 1)), 'death ' + landed.death + ', stumbles ' + landed.stumbles);
+
+    // Gate in the centre (S4): standing, jumping, sliding; a slide ending under the beam goes on.
+    c.check('gate, no order: shock', (play(['S4'], [], 80).death === 'shock'));
+    c.check('gate, jump: shock', (play(['S4'], [{z: 56, order: 'jump'}], 80).death === 'shock'));
+    c.check('gate, slide: through', (play(['S4'], [{z: 56, order: 'slide'}], 80).death === null));
+    const kept = play(['S4'], [{z: 52.4, order: 'slide'}], 60.2);
+    c.check('gate, slide ending under the beam: still sliding', (kept.sim.getRunner().isSliding() && (kept.death === null)), 'z ' + kept.z.toFixed(2));
+    c.check('gate, that slide: through', (play(['S4'], [{z: 52.4, order: 'slide'}], 80).death === null));
+
+    // Block on the left (K1): into its side during a lane change: stumble, back to the centre; twice: trip.
+    const side = play(['K1'], [{z: 61, order: 'left'}], 80);
+    c.check('block, into its side: stumble, back on lane 0', ((side.death === null) && (side.stumbles === 1) && (side.sim.getRunner().lane === 0)));
+    const twoSides = (() => {
+        const sim = new Simulation().newRun({seed: 1, track: [row('K1'), row('K1')]});
+        const out = [];
+        const blocks = () => sim.getTrack().getActive().filter((e) => (e.kind === 'block'));
+        const targets = blocks().map((b) => (b.z + 1));
+        let next = 0;
+        for (let i = 0; (i < 100000) && (sim.getState() !== Simulation.GAME_OVER) && (sim.getZ() < 200); i++) {
+            out.length = 0;
+            if ((sim.getState() === Simulation.RUNNING) && (next < targets.length) && (sim.getZ() >= targets[next])) {
+                out.push('left');
+                next++;
+            }
+            sim.advance(step, out);
+            sim.getEvents().clear();
+        }
+        return sim.getDeath();
+    })();
+    c.check('block, its side twice within the fragile time: trip', (twoSides === 'trip'), String(twoSides));
+    c.check('block, run into its front (K3: a block on lane 0): shock', (play(['K3'], [], 80).death === 'shock'));
+
+    // Gap in the centre (G2: its hole aligned at a tile's start + 3.5 m): fall, or jump over it.
+    const gapRun = play(['G2'], [], 100);
+    c.check('gap, no order: fall', (gapRun.death === 'fall'));
+    const gap = front(new Simulation().newRun({seed: 1, track: [row('G2')]}), 'gap');
+    c.check('gap, its hole at a tile\'s start + 3.5 m', (((gap.z % Tuning.TILE_LENGTH) + Tuning.TILE_LENGTH) % Tuning.TILE_LENGTH === 3.5), 'z ' + gap.z);
+    c.check('gap, jump over it: through', (play(['G2'], [{z: gap.z - 4, order: 'jump'}], 100).death === null));
+
+    // Coins: the rest row's line on lane 0 is picked up running straight.
+    const coins = play(['S6'], [], 100);
+    c.check('coins: the rest line picked up', (coins.coins >= Tuning.COIN_LINE_MIN), coins.coins + ' coins');
+    c.check('coins: ' + Tuning.COIN_POINTS + ' points each', (coins.sim.getScore().getScore() === Math.floor(coins.sim.getDistance() + (coins.coins * Tuning.COIN_POINTS))));
+
+    // Shield (test mode): a death counted, the run goes on.
+    const shielded = new Simulation().newRun({seed: 1, track: [row('S2')], shield: true});
+    const none = [];
+    for (let i = 0; (i < 100000) && (shielded.getZ() < 80); i++) {
+        shielded.advance(step, none);
+        shielded.getEvents().clear();
+    }
+    c.check('shield: the death counted, still running', ((shielded.getShieldDeaths() === 1) && (shielded.getState() === Simulation.RUNNING)));
+
+    // Dying, then over: 1.0 s for a shock.
+    const over = play(['S2'], [], 80);
+    c.check('shock: the game is over after dying', (over.sim.getState() === Simulation.GAME_OVER));
+
+    return c.failures;
+}
+
+module.exports = {run};

@@ -18,6 +18,7 @@ class LightLaneHud extends AbstractHud {
         this._best       = 0;
         this._onPause    = null;
         this._pauseShown = true;
+        this._shield     = null;
         this._numbers    = new Intl.NumberFormat(appTranslator.getLocale());
         this._els        = {};
         this._shown      = {};
@@ -46,6 +47,15 @@ class LightLaneHud extends AbstractHud {
      */
     setPauseButtonShown(shown) {
         this._pauseShown = shown;
+
+        return this;
+    }
+
+    /**
+     * @param {function(): int|null} source - the test mode shield's death count, shown beside the frame rate; null: none
+     */
+    setShieldSource(source) {
+        this._shield = source;
 
         return this;
     }
@@ -100,10 +110,11 @@ class LightLaneHud extends AbstractHud {
     }
 
     _updateFps() {
-        const visible = lightLaneSettings.isFpsShown();
+        const visible = (lightLaneSettings.isFpsShown() || (this._shield !== null));
         this._display('fps', visible);
         if (visible) {
-            this._text('fps', appTranslator.get('hud.fps', {value: this._engine.getFps()}));
+            const fps = appTranslator.get('hud.fps', {value: this._engine.getFps()});
+            this._text('fps', ((this._shield !== null) ? (fps + LightLaneHud.SHIELD_SEPARATOR + this._shield()) : fps));
         }
     }
 
@@ -143,6 +154,8 @@ class LightLaneHud extends AbstractHud {
     }
 }
 
+// Test mode: the frame rate, then the shield's death count (not translated: a debug line).
+LightLaneHud.SHIELD_SEPARATOR = ' | shield deaths: ';
 // Countdown label: zoomed from ZOOM_FROM to 1 over the first ZOOM_SHARE of its time, faded out after FADE_FROM.
 LightLaneHud.ZOOM_FROM  = 0.8;
 LightLaneHud.ZOOM_SHARE = 0.5;

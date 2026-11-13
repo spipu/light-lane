@@ -6,6 +6,7 @@ class LightLaneScores {
     constructor() {
         this._database = null;
         this._memory   = [];
+        this._memoryId = 0;
     }
 
     /**
@@ -33,7 +34,8 @@ class LightLaneScores {
 
     /**
      * @param {{score: int, coins: int, distance: int}} run
-     * @returns {Promise<int|null>} its rank among the 10 best (1 = record), null when it does not enter them
+     * @returns {Promise<{rank: int, id: int}|null>} its rank among the 10 best (1 = record) and its record's id, null
+     *          when it does not enter them
      */
     async add(run) {
         const record = {score: run.score, coins: run.coins, distance: run.distance, date: new Date().toISOString()};
@@ -43,17 +45,18 @@ class LightLaneScores {
         }
         const rank = (best.filter((other) => (LightLaneScores._compare(other, record) <= 0)).length + 1);
         if (this._database === null) {
-            this._memory = [...best, {...record, id: (this._memory.length + 1)}].sort(LightLaneScores._compare).slice(0, LightLaneScores.KEPT);
-            return rank;
+            const id     = ++this._memoryId;
+            this._memory = [...best, {...record, id: id}].sort(LightLaneScores._compare).slice(0, LightLaneScores.KEPT);
+            return {rank: rank, id: id};
         }
-        await this._database.insert(LightLaneDatabaseSchema.SCORE, record);
+        const id      = await this._database.insert(LightLaneDatabaseSchema.SCORE, record);
         const ordered = (await this._database.getAll(LightLaneDatabaseSchema.SCORE)).sort(LightLaneScores._compare);
         const dropped = ordered.slice(LightLaneScores.KEPT).map((other) => ({storeName: LightLaneDatabaseSchema.SCORE, key: other.id}));
         if (dropped.length > 0) {
             await this._database.deleteMulti(dropped);
         }
 
-        return rank;
+        return {rank: rank, id: id};
     }
 
     async clear() {

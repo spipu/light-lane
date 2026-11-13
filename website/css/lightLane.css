@@ -561,3 +561,53 @@
     font-family: system-ui, sans-serif;
     font-size: 2.6cqh;
 }
+
+/* --- Game over (art § 10) --- */
+
+.light-lane-over {
+    text-align: center;
+}
+
+.light-lane-over-score {
+    font-family: "Oswald", "Arial Narrow", sans-serif;
+    font-size: 3em;
+    font-weight: 500;
+    line-height: 1.1;
+    color: #E2F6FA;
+    text-shadow: 0 0 0.4em rgba(120, 214, 232, 0.55);
+}
+
+.light-lane-over-rank {
+    margin-top: 0.2em;
+    font-family: "Oswald", "Arial Narrow", sans-serif;
+    font-size: 1.2em;
+    letter-spacing: 0.08em;
+    color: #78D6E8;
+}
+
+.light-lane-over-record {
+    color: #E2F6FA;
+    text-shadow: 0 0 0.4em rgba(120, 214, 232, 0.9);
+}
+
+.light-lane-over-table {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 0.3em 1.5em;
+    justify-content: center;
+    margin: 1em 0;
+}
+
+.light-lane-over-row {
+    display: contents;
+}
+
+.light-lane-over-label {
+    text-align: left;
+    color: #9FB3BA;
+}
+
+.light-lane-over-value {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}

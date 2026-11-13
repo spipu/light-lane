@@ -16,6 +16,11 @@ LightLaneTuning.LANES_3        = [-1, 0, 1];
 LightLaneTuning.LANES_5        = [-2, -1, 0, 1, 2];
 LightLaneTuning.TILE_LENGTH    = 10.0;
 LightLaneTuning.TILE_THICKNESS = 0.3;
+// Cross marks on every tile, every TILE_MARK_STEP from its start: they show the run's speed (user request); painted
+// FLOOR_MARK, no glow.
+LightLaneTuning.TILE_MARK_STEP  = 5.0;
+LightLaneTuning.TILE_MARK_WIDTH = 0.10;
+LightLaneTuning.TILE_MARK_RAISE = 0.02;
 // The track is drawn this far behind and ahead of the runner (far plane, art § 2).
 LightLaneTuning.TRACK_BEHIND   = 10;
 LightLaneTuning.TRACK_AHEAD    = 140;
@@ -45,8 +50,11 @@ LightLaneTuning.COUNTDOWN_DIGIT_TIME  = 0.6;
 LightLaneTuning.COUNTDOWN_GO_TIME     = 0.4;
 
 // --- Runner animation (art § 6.2) ---
+// A lane change leans the whole runner (pivot at the feet) towards its move while the run clip goes on (user request:
+// a lane clip broke the stride); reached and left in RUNNER_LEAN_TIME.
+LightLaneTuning.RUNNER_LEAN         = 12;
+LightLaneTuning.RUNNER_LEAN_TIME    = 0.06;
 LightLaneTuning.FADE_SHORT_CLIP       = 0.12;
-LightLaneTuning.FADE_LANE_CLIP        = 0.06;
 // Playback speed of run: min(RUN_PACE_BASE + (v − RUN_PACE_FROM) / RUN_PACE_SPAN × RUN_PACE_GAIN, RUN_PACE_MAX).
 LightLaneTuning.RUN_PACE_BASE         = 1.0;
 LightLaneTuning.RUN_PACE_FROM         = 11;
@@ -67,6 +75,16 @@ LightLaneTuning.CAMERA_FOV            = 36;
 
 // --- Scene (art § 2) ---
 LightLaneTuning.AMBIENT               = [255, 255, 255];
+// Test (user request, 2026-11-13): a light at the runner's centre, range RUNNER_LIGHT_RANGE × its half height. A light
+// never makes a face brighter than its painted colour (Object3dRendererBase._pointColor clamps ambient + lights to
+// 255): with it on, the ambient goes down to AMBIENT_LIT and the tiles' tops are cut in cells of TILE_TOP_CELL (the
+// light is computed at the vertices).
+LightLaneTuning.RUNNER_LIGHT_ON       = true;
+// (120, 200, 220) raised by 25 % (user request); a component over 255 is fine: only ambient + lights is clamped.
+LightLaneTuning.RUNNER_LIGHT_COLOR    = [150, 250, 275];
+LightLaneTuning.RUNNER_LIGHT_RANGE    = 1.5;
+LightLaneTuning.AMBIENT_LIT           = [170, 170, 170];
+LightLaneTuning.TILE_TOP_CELL         = 0.5;
 LightLaneTuning.BACKGROUND            = [10, 20, 24];
 LightLaneTuning.Z_NEAR                = 0.2;
 LightLaneTuning.Z_FAR                 = 140;
@@ -76,6 +94,8 @@ LightLaneTuning.DEPTH_SHADING         = Object.freeze({visibility: 50.7, visibil
 LightLaneTuning.COLOR = Object.freeze({
     BG:             [10, 20, 24],
     FLOOR_TOP:      [14, 26, 32],
+    // The cross marks of the tiles: painted, not lit (user request: discreet, no neon).
+    FLOOR_MARK:     [24, 42, 50],
     BODY_TOP:       [26, 34, 40],
     BODY_SIDE:      [16, 22, 28],
     BODY_BOTTOM:    [8, 11, 14],
@@ -109,3 +129,89 @@ LightLaneTuning.HORIZON_AHEAD     = 135;
 // Gamepad stick: the dominant axis past STICK_TRIGGER makes an order; re-armed once both axes are under STICK_REARM.
 LightLaneTuning.STICK_TRIGGER     = 0.6;
 LightLaneTuning.STICK_REARM       = 0.3;
+
+// --- Runner (gameplay § 3) ---
+LightLaneTuning.RUNNER_HALF_WIDTH  = 0.30;
+LightLaneTuning.RUNNER_HALF_DEPTH  = 0.25;
+LightLaneTuning.RUNNER_HEIGHT      = 1.75;
+LightLaneTuning.RUNNER_SLIDE_HEIGHT = 0.80;
+LightLaneTuning.LANE_CHANGE_TIME   = 0.16;
+LightLaneTuning.JUMP_HEIGHT        = 1.40;
+LightLaneTuning.JUMP_TIME          = 0.75;
+LightLaneTuning.JUMP_HEIGHT_BOOTS  = 2.40;
+LightLaneTuning.JUMP_TIME_BOOTS    = 0.95;
+LightLaneTuning.FAST_DROP_SPEED    = 18;
+LightLaneTuning.SLIDE_TIME         = 0.70;
+LightLaneTuning.ORDER_KEEP_TIME    = 0.20;
+LightLaneTuning.STUMBLE_SLOW       = 0.85;
+LightLaneTuning.STUMBLE_SLOW_TIME  = 1.0;
+LightLaneTuning.STUMBLE_RAMP_TIME  = 0.5;
+LightLaneTuning.FRAGILE_TIME       = 5.0;
+LightLaneTuning.STUMBLE_SHAKE      = Object.freeze({amplitude: 0.08, time: 0.25});
+
+// --- Fixed obstacles (gameplay § 4): collision box across (±x), height (y0..y1), depth from the front face
+// (z0..z1; a negative z1 counts from the element's length: L − |z1|), drawn depth. ---
+LightLaneTuning.OBSTACLES = Object.freeze({
+    H:   {kind: 'hurdle', halfWidth: 0.75, y0: 0, y1: 0.80, z0: 0.05, z1: 0.25, length: 0.30},
+    P:   {kind: 'gate', halfWidth: 0.85, y0: 1.15, y1: 1.40, z0: 0.05, z1: 0.25, length: 0.30},
+    B3:  {kind: 'block', halfWidth: 0.80, y0: 0, y1: 3.10, z0: 0.05, z1: -0.05, length: 3},
+    B6:  {kind: 'block', halfWidth: 0.80, y0: 0, y1: 3.10, z0: 0.05, z1: -0.05, length: 6},
+    B10: {kind: 'block', halfWidth: 0.80, y0: 0, y1: 3.10, z0: 0.05, z1: -0.05, length: 10},
+    B16: {kind: 'block', halfWidth: 0.80, y0: 0, y1: 3.10, z0: 0.05, z1: -0.05, length: 16},
+    X3:  {kind: 'gap', halfWidth: 0.70, y0: 0, y1: 0.05, z0: 0.30, z1: -0.30, length: 3.0, holeFrom: 3.5},
+    X5:  {kind: 'gap', halfWidth: 0.70, y0: 0, y1: 0.05, z0: 0.30, z1: -0.30, length: 4.5, holeFrom: 3.0},
+});
+
+// --- Deaths (gameplay § 8.2) ---
+LightLaneTuning.DYING_TIME          = Object.freeze({shock: 1.0, trip: 1.0, fall: 1.2});
+// A fall keeps the run's speed (inertia) and goes down under the jump's own gravity, 8H / T² (gameplay § 3.4).
+// The speed ahead it keeps in a fall decays as e^(−FALL_FORWARD_DECAY·t) (user request: it slows down quickly; at
+// 11 m/s it drifts ≈ 3 m).
+LightLaneTuning.FALL_FORWARD_DECAY  = 3.5;
+LightLaneTuning.FALL_GRAVITY        = ((8 * LightLaneTuning.JUMP_HEIGHT) / (LightLaneTuning.JUMP_TIME * LightLaneTuning.JUMP_TIME));
+LightLaneTuning.DEATH_FLASH         = Object.freeze({shock: 0.5, trip: 0.2, fall: 0});
+LightLaneTuning.DEATH_SHAKE         = Object.freeze({amplitude: 0.15, time: 0.4});
+LightLaneTuning.FALL_LOOK_DOWN      = 20;
+LightLaneTuning.FALL_LOOK_TIME      = 0.6;
+
+// --- Coins (gameplay § 11.1, generation § 9) ---
+LightLaneTuning.COIN_REACH          = 0.25;
+LightLaneTuning.COIN_POINTS         = 5;
+LightLaneTuning.COIN_HEIGHT         = 0.7;
+LightLaneTuning.COIN_LOW_HEIGHT     = 0.4;
+LightLaneTuning.COIN_SPACING        = 2.0;
+LightLaneTuning.COIN_LINE_CHANCE    = 0.55;
+LightLaneTuning.COIN_LINE_MIN       = 5;
+LightLaneTuning.COIN_LINE_MAX       = 10;
+LightLaneTuning.COIN_ARC_COUNT      = 7;
+LightLaneTuning.COIN_GATE_COUNT     = 5;
+// Spin (degrees a second) and bob (± metres at a frequency) of coins and bonuses (art § 5.2).
+LightLaneTuning.COIN_SPIN           = 180;
+LightLaneTuning.COIN_BOB            = 0.08;
+LightLaneTuning.COIN_BOB_HZ         = 1;
+LightLaneTuning.COIN_TAKE_RISE      = 0.6;
+LightLaneTuning.COIN_TAKE_TIME      = 0.15;
+
+// --- Rows (generation § 1, § 4) ---
+LightLaneTuning.CELL                = 0.5;
+LightLaneTuning.GENERATE_AHEAD      = 160;
+LightLaneTuning.RETIRE_BEHIND       = 12;
+LightLaneTuning.FIRST_ROW           = 60;
+LightLaneTuning.ROW_GAP_JITTER      = 0.4;
+LightLaneTuning.LONG_ELEMENT_MARGIN = 0.8;
+// Gap between rows, s, by tier (gameplay § 9.1); tiers past the table keep the last.
+LightLaneTuning.ROW_GAPS            = Object.freeze([1.90, 1.70, 1.50, 1.35, 1.20, 1.10, 1.00, 0.90]);
+
+// --- Effects (art § 7) ---
+LightLaneTuning.SHARD_COUNT         = 48;
+LightLaneTuning.SHARD_SPEED_MIN     = 3;
+LightLaneTuning.SHARD_SPEED_MAX     = 9;
+LightLaneTuning.SHARD_GRAVITY       = 9;
+LightLaneTuning.SHARD_LIFE          = 0.9;
+LightLaneTuning.SHARD_SPIN          = 540;
+LightLaneTuning.SHARD_SIZE          = 0.12;
+LightLaneTuning.FLASH_TIME          = 0.3;
+LightLaneTuning.FRAGILE_BLINK_HZ    = 4;
+
+// --- Game over (art § 10) ---
+LightLaneTuning.GAME_OVER_INPUT_LOCK = 0.4;
