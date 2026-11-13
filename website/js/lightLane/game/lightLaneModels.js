@@ -103,7 +103,7 @@ class LightLaneModels {
         const color = LightLaneTuning.COLOR;
         const w     = (LightLaneTuning.LANE_WIDTH / 2);
         const h     = LightLaneTuning.TILE_THICKNESS;
-        const faces = {top: color.FLOOR_TOP, side: color.BODY_SIDE, bottom: color.BODY_BOTTOM};
+        const faces = {top: color.FLOOR_TOP, side: color.BODY_SIDE, bottom: null};
         if (!lit) {
             b.box([-w, 0, z0], [w, h, z1], faces);
             return;
@@ -183,7 +183,7 @@ class LightLaneModels {
         const o     = (LightLaneTuning.LINE_OUTSET + (lineSize / 2));
         const b     = new LightLaneObjectBuilder();
         b.prism([[-w, -l + c], [-w, l - c], [-w + c, l], [w - c, l], [w, l - c], [w, -l + c], [w - c, -l], [-w + c, -l]], 0, h,
-            {top: color.BODY_TOP, side: color.BODY_SIDE, bottom: color.BODY_BOTTOM});
+            {top: color.BODY_TOP, side: color.BODY_SIDE, bottom: null});
         const line = (from, to, normal) => b.bar(from, to, lineSize, color.DANGER, normal);
         line([-w - o, h + o, -l + c], [-w - o, h + o, l - c], [-1, 1, 0]);
         line([w + o, h + o, -l + c], [w + o, h + o, l - c], [1, 1, 0]);

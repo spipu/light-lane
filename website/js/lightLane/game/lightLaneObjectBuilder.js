@@ -13,7 +13,8 @@ class LightLaneObjectBuilder {
      *
      * @param {number[]} min
      * @param {number[]} max
-     * @param {{top: number[], side: number[], bottom: number[]}} colors - 0-255
+     * @param {{top: number[], side: number[], bottom: number[]|null}} colors - 0-255; bottom null: no bottom face (one
+     *        never seen from the camera, above the ground)
      * @param {boolean}  glow
      */
     box(min, max, colors, glow = false) {
@@ -29,7 +30,9 @@ class LightLaneObjectBuilder {
         ];
         // c[0..3]: the front (z0) corners from bottom left, clockwise seen from the front; c[4..7]: the same at z1.
         this._face([c[3], c[7], c[6], c[2]], colors.top, glow);
-        this._face([c[0], c[1], c[5], c[4]], colors.bottom, glow);
+        if (colors.bottom !== null) {
+            this._face([c[0], c[1], c[5], c[4]], colors.bottom, glow);
+        }
         this._face([c[0], c[3], c[2], c[1]], colors.side, glow);
         this._face([c[5], c[6], c[7], c[4]], colors.side, glow);
         this._face([c[4], c[7], c[3], c[0]], colors.side, glow);
@@ -118,7 +121,9 @@ class LightLaneObjectBuilder {
         const top    = outline.map(([x, z]) => [x, y1, z]);
         const bottom = outline.map(([x, z]) => [x, y0, z]).reverse();
         this.polygon(top, colors.top);
-        this.polygon(bottom, colors.bottom);
+        if (colors.bottom !== null) {
+            this.polygon(bottom, colors.bottom);
+        }
         const n = outline.length;
         for (let i = 0; i < n; i++) {
             const [xa, za] = outline[i];
