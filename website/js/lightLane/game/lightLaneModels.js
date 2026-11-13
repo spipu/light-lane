@@ -24,7 +24,10 @@ class LightLaneModels {
         LightLaneModels._load(LightLaneModels.HURDLE, LightLaneModels._hurdle(line));
         LightLaneModels._load(LightLaneModels.GATE, LightLaneModels._gate(line));
         for (const code of LightLaneModels.BLOCKS) {
-            LightLaneModels._load(LightLaneModels.blockCode(code), LightLaneModels._block(LightLaneTuning.OBSTACLES[code].length, line));
+            // Two variants: the side crosses on the left or on the right, the side the camera sees (presentation).
+            for (const [suffix, side] of LightLaneModels.BLOCK_SIDES) {
+                LightLaneModels._load(LightLaneModels.blockCode(code) + suffix, LightLaneModels._block(LightLaneTuning.OBSTACLES[code].length, line, side));
+            }
         }
         LightLaneModels._load(LightLaneModels.COIN, LightLaneModels._coin());
         for (const [name, rgb] of Object.entries(LightLaneModels.SHARD_COLORS)) {
@@ -241,17 +244,6 @@ class LightLaneModels {
         return b.data();
     }
 
-    // A flat glowing DANGER strip in the plane x from (y, z) a to b, `size` wide, facing the side `side` (−1 left, +1
-    // right) only.
-    static _sideStrip(b, x, a, c, size, side) {
-        const dy  = (c[0] - a[0]);
-        const dz  = (c[1] - a[1]);
-        const len = Math.hypot(dy, dz);
-        const ny  = ((-dz / len) * (size / 2));
-        const nz  = ((dy / len) * (size / 2));
-        b.facing([[x, a[0] - ny, a[1] - nz], [x, a[0] + ny, a[1] + nz], [x, c[0] + ny, c[1] + nz], [x, c[0] - ny, c[1] - nz]],
-            [x - side, a[0], a[1]], LightLaneTuning.COLOR.DANGER, true);
-    }
 
     // A red cross (LETHAL, glowing) in the plane z, over the rectangle (x0, y0) – (x1, y1): the way that is closed
     // (user request: one did not see where an obstacle cannot be passed).
@@ -262,8 +254,8 @@ class LightLaneModels {
     }
 
     // A block 1.80 × 3.20 × L, its vertical corners cut at 45°, drawn by its DANGER edges only; a red cross on its
-    // front face, orange crosses along its sides.
-    static _block(length, lineSize) {
+    // front face, orange crosses along the side crossSide (−1 left, +1 right).
+    static _block(length, lineSize, crossSide) {
         const color = LightLaneTuning.COLOR;
         const w     = 0.90;
         const h     = 3.20;
@@ -289,15 +281,15 @@ class LightLaneModels {
         LightLaneModels._cross(b, (-w + c), 0.1, (w - c), (h - 0.1), -l, lineSize);
         const count = Math.max(1, Math.round((2 * (l - c)) / h));
         const step  = ((2 * (l - c)) / count);
-        for (const side of [-1, 1]) {
-            const x = (side * (w + o));
-            for (let k = 0; k < count; k++) {
-                const z0 = (-l + c + (k * step) + LightLaneModels.SIDE_CROSS_INSET);
-                const z1 = (-l + c + ((k + 1) * step) - LightLaneModels.SIDE_CROSS_INSET);
-                // Flat strips facing out: the crosses of the far side, facing away, are not drawn through the block.
-                LightLaneModels._sideStrip(b, x, [0.1, z0], [h - 0.1, z1], lineSize, side);
-                LightLaneModels._sideStrip(b, x, [0.1, z1], [h - 0.1, z0], lineSize, side);
-            }
+        // The crosses as lines with a volume, so the neon shows whatever the angle (user request), on the side the
+        // camera sees only (crossSide: −1 left, +1 right; the presentation swaps the variant), so the far side's are not
+        // seen through the block.
+        const x = (crossSide * (w + o));
+        for (let k = 0; k < count; k++) {
+            const z0 = (-l + c + (k * step) + LightLaneModels.SIDE_CROSS_INSET);
+            const z1 = (-l + c + ((k + 1) * step) - LightLaneModels.SIDE_CROSS_INSET);
+            line([x, 0.1, z0], [x, h - 0.1, z1], [crossSide, 0, 0]);
+            line([x, 0.1, z1], [x, h - 0.1, z0], [crossSide, 0, 0]);
         }
 
         return b.data();
@@ -394,6 +386,8 @@ LightLaneModels.GATE       = 'gate';
 LightLaneModels.COIN       = 'coin';
 LightLaneModels.SHARD      = 'shard';
 LightLaneModels.BLOCKS     = Object.freeze(['B3', 'B6', 'B10', 'B16']);
+// A block's variants by the side of its crosses: [suffix, side].
+LightLaneModels.BLOCK_SIDES = Object.freeze([['L', -1], ['R', 1]]);
 LightLaneModels.GAPS       = Object.freeze(['X3', 'X5']);
 // One shard object a colour (art § 5.2): name → palette code.
 LightLaneModels.SHARD_COLORS = Object.freeze({Player: 'PLAYER', Danger: 'DANGER'});

@@ -397,9 +397,13 @@ class LightLanePresentation {
         const frame   = ++this._frame;
         const runTime = this._simulation.getRunTime();
         for (const entity of this._simulation.getTrack().getActive()) {
-            const code = LightLaneModels.obstacleCode(entity);
+            let code = LightLaneModels.obstacleCode(entity);
             if (code === null) {
                 continue;
+            }
+            // A block shows its side crosses on the side the camera sees.
+            if (entity.kind === LightLaneEntity.BLOCK) {
+                code += ((this._camera.getX() < entity.x) ? LightLaneModels.BLOCK_SIDES[0][0] : LightLaneModels.BLOCK_SIDES[1][0]);
             }
             const coin   = (entity.kind === LightLaneEntity.COIN);
             const since  = (runTime - entity.takenAt);
@@ -407,7 +411,7 @@ class LightLanePresentation {
                 continue;
             }
             let view = this._views.get(entity);
-            if ((view !== undefined) && (view.serial !== entity.serial)) {
+            if ((view !== undefined) && ((view.serial !== entity.serial) || (view.code !== code))) {
                 this._release(view);
                 view = undefined;
             }
