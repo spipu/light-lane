@@ -36,6 +36,8 @@ class LightLanePresentation {
         this._rows         = [];      // pool slots: {row, codes: string[], tiles: Instance[], edge: Instance, far}
         this._backdrop     = null;
         this._farDecor     = Infinity;
+        this._farDecor2    = Infinity;
+        this._canvasWidth  = 0;
         this._farLines     = Infinity;
         this._ids          = new Map();   // object code → id
         this._views        = new Map();   // entity → {serial, code, instance, far, frame}
@@ -83,7 +85,7 @@ class LightLanePresentation {
             edge:  LightLanePresentation.instance(this._id(LightLaneModels.TILE_EDGE)),
             whole: LightLanePresentation.instance(this._id(LightLaneModels.ROW3)),
             gaps:  false,
-            far:   false
+            far:   0          // the level of its lines: LightLaneModels.TRACK_LEVELS index
         }));
         this._backdrop = LightLanePresentation.instance(this._id(LightLaneModels.BACKDROP));
         this._effects.bind();
@@ -181,6 +183,7 @@ class LightLanePresentation {
             this._camera.follow(dt, simulation.getX(), simulation.getY(), simulation.getZ(), simulation.getRunner().getLaneSide());
             this._effects.update(dt, this._engine);
         }
+        this._updateFarDistances();
         this._engine.setBloom((lightLaneSettings.isBloomOn() && (this._rendererCode === LightLanePresentation.BLOOM_RENDERER)) ? this._bloom : null);
         this._draw();
         this._screen.update();
@@ -353,7 +356,7 @@ class LightLanePresentation {
                 slot.whole.setObject(this._id(this._tileVariant(LightLaneModels.ROW3, slot.far, slot.lit)));
                 slot.whole.placeAt(0, y, centre);
             }
-            const far = this._isFar(slot.far, Math.abs(centre - camZ), this._farDecor);
+            const far = this._trackLevel(slot.far, Math.abs(centre - camZ));
             // Under the runner's light (art § 2), by half tile (a mark every half tile shows it as a row): fine where the
             // light falls and the camera sees, one coarser row after, all the rest plain (user requests).
             const lit = ((LightLaneTuning.RUNNER_LIGHT_ON) ? LightLanePresentation._litLevel(row, z, this._light.range) : null);
@@ -361,7 +364,7 @@ class LightLanePresentation {
                 slot.far = far;
                 slot.lit = lit;
                 slot.tiles.forEach((tile, i) => tile.setObject(this._id(this._tileVariant(slot.codes[i], far, lit))));
-                slot.edge.setObject(this._id(LightLaneModels.TILE_EDGE + ((far) ? LightLaneModels.FAR_SUFFIX : '')));
+                slot.edge.setObject(this._id(LightLaneModels.TILE_EDGE + LightLaneModels.TRACK_LEVELS[far]));
                 slot.whole.setObject(this._id(this._tileVariant(LightLaneModels.ROW3, far, lit)));
             }
             // A row without a gap is one tile across its lanes (no separation between them); with a gap, a tile a lane.
@@ -445,12 +448,33 @@ class LightLanePresentation {
 
     // A tile's object (plain or holed): its celled variant near the runner's light (LightLaneModels.LIT_LEVELS), else
     // the near or far one.
-    _tileVariant(code, far, lit) {
+    _tileVariant(code, level, lit) {
         if (lit !== null) {
             return (code + lit);
         }
 
-        return (code + ((far) ? LightLaneModels.FAR_SUFFIX : ''));
+        return (code + LightLaneModels.TRACK_LEVELS[level]);
+    }
+
+    // The level of a track tile's lines (0 near, 1 far, 2 farthest) at that distance, each switch with its hysteresis.
+    _trackLevel(level, distance) {
+        const far  = this._isFar((level >= 1), distance, this._farDecor);
+        const far2 = this._isFar((level >= 2), distance, this._farDecor2);
+
+        return ((far2) ? 2 : ((far) ? 1 : 0));
+    }
+
+    // The distances of the far variants (art § 4), from the canvas' real width: again when it changes.
+    _updateFarDistances() {
+        const width = this._screen.getCanvas().width;
+        if (width === this._canvasWidth) {
+            return;
+        }
+        this._canvasWidth = width;
+        const focal       = (width / (2 * Math.tan(LightLaneTuning.CAMERA_FOV * Math.PI / LightLanePresentation.HALF_TURN)));
+        this._farDecor    = ((focal * LightLaneTuning.LINE_SIZE_DECOR) / LightLaneTuning.LINE_FAR_PIXELS);
+        this._farDecor2   = ((focal * LightLaneTuning.LINE_SIZE_DECOR_FAR) / LightLaneTuning.LINE_FAR_PIXELS);
+        this._farLines    = ((focal * LightLaneTuning.LINE_SIZE) / LightLaneTuning.LINE_FAR_PIXELS);
     }
 
     /**
@@ -523,9 +547,7 @@ class LightLanePresentation {
         }
         this._hud = new LightLaneHud(this._engine, this._simulation).setBest(this._best).setOnPause(this._onPause).setShieldSource(this._shield);
         this._screen.bindHud(this._hud);
-        const focal    = (LightLanePresentation.VIRTUAL_WIDTH / (2 * Math.tan(LightLaneTuning.CAMERA_FOV * Math.PI / LightLanePresentation.HALF_TURN)));
-        this._farDecor = ((focal * LightLaneTuning.LINE_SIZE_DECOR) / LightLaneTuning.LINE_FAR_PIXELS);
-        this._farLines = ((focal * LightLaneTuning.LINE_SIZE) / LightLaneTuning.LINE_FAR_PIXELS);
+        this._canvasWidth = 0;
         this._rows.forEach((slot) => {
             slot.row = null;
         });

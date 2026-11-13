@@ -133,6 +133,9 @@ LightLaneTuning.LINE_SIZE         = 0.08;
 LightLaneTuning.LINE_SIZE_DECOR   = 0.05;
 LightLaneTuning.LINE_SIZE_FAR     = 0.20;
 LightLaneTuning.LINE_SIZE_DECOR_FAR = 0.12;
+// The track's lines far away: under LINE_FAR_PIXELS at 0.12 m too (a 0.12 m line is ½ px at 140 m on a 850 px canvas),
+// a third level (user request: the lane lines broke up in the distance).
+LightLaneTuning.LINE_SIZE_DECOR_FAR2 = 0.29;
 LightLaneTuning.LINE_OUTSET       = 0.01;
 // The far variant takes over when a line would be under LINE_FAR_PIXELS on screen, and gives way under
 // LINE_NEAR_RATIO × that distance.
