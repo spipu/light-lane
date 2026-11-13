@@ -139,6 +139,18 @@ LightLaneTuning.COLOR = Object.freeze({
 LightLaneTuning.LINE_SIZE         = 0.08;
 LightLaneTuning.LINE_SIZE_DECOR   = 0.05;
 LightLaneTuning.LINE_OUTSET       = 0.01;
+// --- Fog under the track: the user's 60 frames (.source/fog/buildFog.py → assets/lightLane/textures/fog/) ---
+// A plane FOG_DEPTH under the track, from FOG_BEHIND behind the runner to FOG_AHEAD ahead, FOG_HALF_WIDTH aside, its
+// texture repeated every FOG_TILE ([across, along] metres) and played at FOG_FPS (user request: 15, then 30); the plane steps by
+// whole tiles, so the fog stays put in the world and flows under the runner.
+LightLaneTuning.FOG_FRAMES        = 60;
+LightLaneTuning.FOG_FPS           = 30;
+LightLaneTuning.FOG_DEPTH         = 6;
+LightLaneTuning.FOG_BEHIND        = 20;
+LightLaneTuning.FOG_AHEAD         = 160;
+LightLaneTuning.FOG_HALF_WIDTH    = 220;
+LightLaneTuning.FOG_TILE          = Object.freeze([60, 30]);
+
 // --- Background: the user's picture of a city (.source/fond.png → assets/lightLane/textures/skyline.jpg) ---
 // Drawn by the engine's sky pass (Engine3d.setSky: before the geometry, by view angle, no depth shading). Its own
 // proportions (user request: not squashed): SKY_SPAN degrees across its width, as many a pixel upwards; the luminous
@@ -219,6 +231,10 @@ LightLaneTuning.COIN_BOB            = 0.08;
 LightLaneTuning.COIN_BOB_HZ         = 1;
 LightLaneTuning.COIN_TAKE_RISE      = 0.6;
 LightLaneTuning.COIN_TAKE_TIME      = 0.15;
+// A coin picked up goes on with the runner, at least COIN_TAKE_AHEAD before its centre, growing to COIN_TAKE_SCALE
+// as it fades (user request: it seemed to go through the runner).
+LightLaneTuning.COIN_TAKE_AHEAD     = 0.4;
+LightLaneTuning.COIN_TAKE_SCALE     = 1.6;
 
 // --- Rows (generation § 1, § 4) ---
 LightLaneTuning.CELL                = 0.5;

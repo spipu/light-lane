@@ -45,6 +45,7 @@ class LightLaneModels {
                 LightLaneModels._load(LightLaneModels.gapTileCode(code) + suffix, LightLaneModels._gapTile(LightLaneTuning.OBSTACLES[code], LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.LINE_SIZE, cells));
             }
         }
+        LightLaneModels._load(LightLaneModels.FOG, LightLaneModels._fog());
         LightLaneModels._skyId = loader.textures().load(LightLaneModels.ASSETS + LightLaneTuning.SKY_URL);
         loader.animatedModels().loadByCode(LightLaneModels.RUNNER, LightLaneModels.ASSETS + 'models/runner.gltf');
     }
@@ -348,6 +349,26 @@ class LightLaneModels {
         return b.data();
     }
 
+    // The fog plane under the track (user request): one flat quad, its top facing up, its texture the 60 frames played
+    // at FOG_FPS, repeated every FOG_TILE; one tile longer than the reach, so it can step by whole tiles.
+    static _fog() {
+        const [tileX, tileZ] = LightLaneTuning.FOG_TILE;
+        const w      = LightLaneTuning.FOG_HALF_WIDTH;
+        const length = (LightLaneTuning.FOG_BEHIND + LightLaneTuning.FOG_AHEAD + tileZ);
+        const u      = ((2 * w) / tileX);
+        const v      = (length / tileZ);
+        const frames = [...Array(LightLaneTuning.FOG_FRAMES).keys()];
+        const anim   = {ids: frames.map((i) => (i + 1)), duration: (1 / LightLaneTuning.FOG_FPS)};
+        const face   = (pts, map) => ({pts: pts, color: [255, 255, 255], texture: 1, map: map, textures: anim, lightGroup: LightLaneObjectBuilder.LIGHT_GROUP});
+
+        return {
+            textures: frames.map((i) => (LightLaneModels.ASSETS + 'textures/fog/fog_' + String(i).padStart(2, '0') + '.jpg')),
+            points:   [[-w, 0, 0], [-w, 0, length], [w, 0, length], [w, 0, 0]],
+            // Clockwise seen from above (the engine's front faces), as box()'s top.
+            faces:    [face([1, 2, 3], [[0, 0], [0, v], [u, v]]), face([1, 3, 4], [[0, 0], [u, v], [u, 0]])]
+        };
+    }
+
     // The line along the right edge of the rightmost lane, alone.
     static _tileEdge(lineSize) {
         const w = (LightLaneTuning.LANE_WIDTH / 2);
@@ -376,6 +397,7 @@ LightLaneModels.LIT_LEVELS = Object.freeze({
 });
 LightLaneModels.TILE       = 'tile';
 LightLaneModels.TILE_EDGE  = 'tileEdge';
+LightLaneModels.FOG        = 'fog';
 // A whole row of 3 lanes in one tile (user request: no separation between lanes but at a gap).
 LightLaneModels.ROW3       = 'row3';
 // The background picture's texture id (load()).

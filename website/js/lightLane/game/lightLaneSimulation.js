@@ -354,6 +354,7 @@ class LightLaneSimulation {
             if ((entity.kind === LightLaneEntity.COIN) && !entity.taken && LightLaneCollision.picks(reach, entity)) {
                 entity.taken   = true;
                 entity.takenAt = this._runTime;
+                entity.takenDz = (entity.z - this._z);
                 this._score.addCoin(LightLaneTuning.COIN_POINTS, false);
                 this._events.add(LightLaneEvents.COIN, null, entity);
             }

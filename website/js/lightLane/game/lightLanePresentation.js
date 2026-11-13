@@ -19,6 +19,7 @@ class LightLanePresentation {
         this._hud          = null;
         this._camera       = new LightLaneCamera();
         this._effects      = new LightLaneEffects();
+        this._fog          = null;
         this._controls     = null;
         this._rendererCode = null;
         this._best         = 0;
@@ -82,6 +83,7 @@ class LightLanePresentation {
             whole: LightLanePresentation.instance(this._id(LightLaneModels.ROW3)),
             gaps:  false,
         }));
+        this._fog     = LightLanePresentation.instance(this._id(LightLaneModels.FOG));
         this._effects.bind();
         this._buildDisplay();
 
@@ -332,6 +334,7 @@ class LightLanePresentation {
         engine.drawInit();
         this._camera.setView(engine, this._effects.offset);
         engine.lightsCalculatePosition();
+        this._drawFog();
         this._drawTrack();
         this._drawEntities();
         if (!this._hidden) {
@@ -391,6 +394,14 @@ class LightLanePresentation {
     }
 
 
+    // The fog plane under the track, stepped by whole tiles along the run: it stays put in the world.
+    _drawFog() {
+        const tileZ = LightLaneTuning.FOG_TILE[1];
+        const z     = this._simulation.getZ();
+        this._fog.placeAt(0, -LightLaneTuning.FOG_DEPTH, (Math.floor((z - LightLaneTuning.FOG_BEHIND) / tileZ) * tileZ));
+        this._engine.drawInstance(this._fog);
+    }
+
     // One instance per element of the track, made or given back as the stream goes.
     _drawEntities() {
         const engine  = this._engine;
@@ -441,8 +452,11 @@ class LightLanePresentation {
         const phase = (entity.serial * LightLanePresentation.BOB_PHASE_STEP);
         const bob   = (LightLaneTuning.COIN_BOB * Math.sin((2 * Math.PI * LightLaneTuning.COIN_BOB_HZ * this._time) + phase));
         const taken = ((entity.taken) ? Math.min(1, (since / LightLaneTuning.COIN_TAKE_TIME)) : 0);
-        instance.placeAt(entity.x, ((entity.y - LightLanePresentation.COIN_HALF_HEIGHT) + bob + (LightLaneTuning.COIN_TAKE_RISE * taken)), entity.z);
+        // Picked up, it goes on with the runner, just before it, rising, growing and fading (art § 7).
+        const z     = ((entity.taken) ? (this._simulation.getZ() + Math.max(entity.takenDz, LightLaneTuning.COIN_TAKE_AHEAD)) : entity.z);
+        instance.placeAt(entity.x, ((entity.y - LightLanePresentation.COIN_HALF_HEIGHT) + bob + (LightLaneTuning.COIN_TAKE_RISE * taken)), z);
         instance.setRotation([0, ((LightLaneTuning.COIN_SPIN * this._time) % LightLanePresentation.FULL_TURN), 0]);
+        instance.setRenderScale(1 + ((LightLaneTuning.COIN_TAKE_SCALE - 1) * taken));
         instance.setRenderLight(1 - taken);
     }
 
@@ -491,6 +505,7 @@ class LightLanePresentation {
     // Back to the pool of its own object.
     _release(view) {
         view.instance.setRenderLight(1);
+        view.instance.setRenderScale(1);
         if (!this._free.has(view.code)) {
             this._free.set(view.code, []);
         }

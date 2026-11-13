@@ -17,6 +17,7 @@ class LightLaneEntity {
         this.hit    = false;    // its collision has been dealt with
         this.taken  = false;    // a coin picked up
         this.takenAt = 0;       // run time of the pick-up (the presentation's fade)
+        this.takenDz = 0;       // the coin's z less the runner's at the pick-up (it then goes on with the runner)
     }
 
     reset() {
@@ -25,6 +26,7 @@ class LightLaneEntity {
         this.hit     = false;
         this.taken   = false;
         this.takenAt = 0;
+        this.takenDz = 0;
 
         return this;
     }
