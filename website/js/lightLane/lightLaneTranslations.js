@@ -230,6 +230,12 @@ class LightLaneTranslations {
                 it: 'Non è stato possibile leggere o salvare i punteggi.',
                 es: 'No se han podido leer ni guardar las puntuaciones.'
             },
+            'game.failed': {
+                fr: 'La course s’est arrêtée sur une erreur.',
+                en: 'The run stopped on an error.',
+                it: 'La corsa si è interrotta per un errore.',
+                es: 'La carrera se detuvo por un error.'
+            },
             'pause.title': {
                 fr: 'Pause',
                 en: 'Pause',

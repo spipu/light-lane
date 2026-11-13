@@ -1,5 +1,5 @@
 {
-    "version": "v0.0004",
+    "version": "v0.0005",
     "files": {
         "assets": [
             "/assets/lightLane/models/runner.bin",
@@ -111,9 +111,21 @@
             "/js/lightLane/lightLaneDatabaseSchema.js",
             "/js/lightLane/lightLaneSettings.js",
             "/js/lightLane/lightLaneScores.js",
+            "/js/lightLane/lightLaneTuning.js",
             "/js/lightLane/game/lightLaneControls.js",
+            "/js/lightLane/game/lightLaneTestMode.js",
+            "/js/lightLane/game/lightLaneCommandSampler.js",
+            "/js/lightLane/game/lightLaneRunScore.js",
+            "/js/lightLane/game/lightLaneSimulation.js",
+            "/js/lightLane/game/lightLaneObjectBuilder.js",
+            "/js/lightLane/game/lightLaneModels.js",
+            "/js/lightLane/game/lightLaneCamera.js",
+            "/js/lightLane/game/lightLaneHud.js",
+            "/js/lightLane/game/lightLanePresentation.js",
+            "/js/lightLane/game/lightLaneGame.js",
             "/js/lightLane/menu/abstractLightLaneMenuScreen.js",
             "/js/lightLane/menu/lightLaneOptionsModal.js",
+            "/js/lightLane/menu/lightLanePauseModal.js",
             "/js/lightLane/menu/mainMenuScreen.js",
             "/js/lightLane/menu/bestScoresScreen.js",
             "/js/lightLane/menu/lightLaneMenuNavigator.js",

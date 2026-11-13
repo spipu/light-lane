@@ -10,6 +10,8 @@ class LightLaneMenuNavigator {
         this._mainMenuScreen   = new MainMenuScreen(this, this._display);
         this._bestScoresScreen = new BestScoresScreen(this, this._display);
         this._currentScreen    = null;
+        // Read once: the test mode of the local host (gameplay § 13), inactive anywhere else.
+        this._testMode         = LightLaneTestMode.fromLocation();
     }
 
     // A storage failure keeps the default settings and the scores of the session only: the menu still opens, with a
@@ -36,6 +38,39 @@ class LightLaneMenuNavigator {
             });
 
         return this;
+    }
+
+    // The run replaces the menus (modelled on RacingMenuNavigator.startRace).
+    startGame() {
+        this._switchTo(null);
+        this._display.destroy();
+        new LightLaneGame(this, this._testMode).start().catch((error) => {
+            console.error(error);
+            this.gameFailed(error);
+        });
+    }
+
+    // The run quit: the main menu.
+    endGame() {
+        this._display.init();
+        this.showMainMenu();
+    }
+
+    /**
+     * @param {int|null} highlighted - the run just over, highlighted in the best scores
+     */
+    endGameToScores(highlighted) {
+        this._display.init();
+        this.openBestScores(highlighted);
+    }
+
+    /**
+     * @param {Error} error - what stopped the run
+     */
+    gameFailed(error) {
+        this._display.init();
+        this.showMainMenu();
+        new AppMenuModal(this._display).showError(appTranslator.get('game.failed'), error.message);
     }
 
     showMainMenu() {

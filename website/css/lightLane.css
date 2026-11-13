@@ -463,3 +463,101 @@
     background: linear-gradient(90deg, rgba(120, 214, 232, 0.28), rgba(120, 214, 232, 0.04));
     border-left-color: #78D6E8;
 }
+
+/* --- Run: the frozen run under the pause (as racing), the HUD (art § 9, 1cqh = 10.8 px of the 1080 letterbox) --- */
+
+#screen:has(> .light-lane-frozen .app-menu-overlay) > :not(.app-menu-display) {
+    filter: blur(6px) brightness(0.45);
+}
+
+.light-lane-hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    container-type: size;
+    overflow: hidden;
+    font-family: "Oswald", "Arial Narrow", sans-serif;
+    color: #E2F6FA;
+}
+
+/* Score 64 px, BEST 26 px under it, the block's bottom 112 px from the top. */
+.light-lane-hud-score-block {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% - 10.37cqh);
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.1;
+    text-shadow: 0 0 0.4em rgba(120, 214, 232, 0.55);
+}
+
+.light-lane-hud-score {
+    font-size: 5.93cqh;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+}
+
+.light-lane-hud-best {
+    display: flex;
+    gap: 0.5em;
+    font-size: 2.41cqh;
+    letter-spacing: 0.12em;
+    color: #78D6E8;
+}
+
+/* 3, 2, 1, GO in 220 px; the HUD sets the zoom and the fade. */
+.light-lane-hud-countdown {
+    position: absolute;
+    left: 50%;
+    top: 45%;
+    transform: translate(-50%, -50%);
+    font-size: 20.37cqh;
+    font-weight: 600;
+    line-height: 1;
+    color: #E2F6FA;
+    text-shadow: 0 0 0.25em rgba(120, 214, 232, 0.8);
+}
+
+/* At the place of the touch controls' pause button (LightLaneControls.VIRTUAL_PAD_BUTTONS.pause). */
+.light-lane-hud-pause {
+    position: absolute;
+    top: 2.5cqh;
+    right: 3.9cqh;
+    width: 11.2cqh;
+    height: 11.2cqh;
+    padding: 2.4cqh;
+    border: 0.25cqh solid #78D6E8;
+    border-radius: 1.2cqh;
+    background: rgba(8, 14, 18, 0.6);
+    color: #78D6E8;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.light-lane-hud-pause svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    fill: currentColor;
+}
+
+.light-lane-hud-pause:hover {
+    background: rgba(120, 214, 232, 0.15);
+}
+
+.light-lane-hud-fps {
+    position: absolute;
+    bottom: 2cqh;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.4em 0.8em;
+    border-radius: 0.5em;
+    background: rgba(0, 0, 0, 0.4);
+    font-family: system-ui, sans-serif;
+    font-size: 2.6cqh;
+}

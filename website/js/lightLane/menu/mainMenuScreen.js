@@ -8,6 +8,9 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
         const {titleEl, listEl} = this._buildSimpleMenu('');
         this._addLogo(titleEl);
 
+        this._addListItem(listEl, appTranslator.get('menu.play'), () => {
+            this._navigator.startGame();
+        });
         this._addListItem(listEl, appTranslator.get('menu.bestScores'), () => {
             this._navigator.openBestScores();
         });
