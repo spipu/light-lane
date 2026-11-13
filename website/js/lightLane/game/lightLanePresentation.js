@@ -344,12 +344,10 @@ class LightLanePresentation {
                 slot.edge.placeAt((lanes[lanes.length - 1] * LightLaneTuning.LANE_WIDTH), y, centre);
             }
             const far = this._isFar(slot.far, Math.abs(centre - camZ), this._farDecor);
-            // Only the tiles the runner's light can reach are cut in fine cells, the next ring in coarser ones (art § 2):
-            // the others stay cheap.
-            const reach = (Math.abs(centre - z) - ((length / 2) + this._light.range));
-            // One intermediate row, ahead only (the camera sees almost nothing behind the runner).
-            const ahead = (centre > z);
-            const lit   = ((!LightLaneTuning.RUNNER_LIGHT_ON) ? null : ((reach < 0) ? LightLaneModels.LIT_SUFFIX : ((ahead && (reach < length)) ? LightLaneModels.MID_SUFFIX : null)));
+            // Under the runner's light (art § 2): the runner's own row in fine cells, the next one in coarser cells,
+            // every other row plain (user request: exactly one row of each).
+            const runnerRow = Math.floor(z / length);
+            const lit       = ((!LightLaneTuning.RUNNER_LIGHT_ON) ? null : ((row === runnerRow) ? LightLaneModels.LIT_SUFFIX : ((row === (runnerRow + 1)) ? LightLaneModels.MID_SUFFIX : null)));
             if ((far !== slot.far) || (lit !== slot.lit)) {
                 slot.far = far;
                 slot.lit = lit;
