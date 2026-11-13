@@ -318,17 +318,21 @@ class LightLaneSimulation {
             if (entity.hit || (entity.kind === LightLaneEntity.COIN) || (entity.kind === LightLaneEntity.GAP) || !LightLaneCollision.overlaps(sweep, entity.box)) {
                 continue;
             }
-            entity.hit = true;
             const entry   = LightLaneCollision.entry(before, entity.box);
             const outcome = LightLaneCollision.outcome(entity.kind, entry);
+            // Already inside (the step before overlapped too): nothing new. A side entry is not marked: the element
+            // stays solid, each new try from the side is a new stumble (the second while fragile kills).
             if (outcome === LightLaneCollision.IGNORE) {
                 continue;
             }
             if (outcome === LightLaneCollision.DEATH) {
+                entity.hit = true;
                 this._kill(LightLaneRunner.DEATH_SHOCK);
                 return true;
             }
             if (outcome === LightLaneCollision.STUMBLE_LAND) {
+                // Landed on it, on its feet behind it: done with this element.
+                entity.hit = true;
                 runner.land();
             }
             if (runner.stumble(entry === LightLaneCollision.SIDE)) {

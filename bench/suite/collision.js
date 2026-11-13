@@ -76,6 +76,30 @@ function run() {
         return sim.getDeath();
     })();
     c.check('block, its side twice within the fragile time: trip', (twoSides === 'trip'), String(twoSides));
+    // The same block from the side twice (it stays solid): stumble, then trip while fragile.
+    const sameTwice = (() => {
+        const sim   = new Simulation().newRun({seed: 1, track: [row('L2')]});
+        const block = sim.getTrack().getActive().find((e) => (e.kind === 'block'));
+        const out   = [];
+        const tries = [block.z + 1, block.z + 4];
+        let next    = 0;
+        let stumbles = 0;
+        for (let i = 0; (i < 100000) && (sim.getState() !== Simulation.GAME_OVER) && (sim.getZ() < (block.z + 20)); i++) {
+            out.length = 0;
+            if ((sim.getState() === Simulation.RUNNING) && (next < tries.length) && (sim.getZ() >= tries[next])) {
+                out.push('left');
+                next++;
+            }
+            sim.advance(step, out);
+            const events = sim.getEvents();
+            for (let k = 0; k < events.getCount(); k++) {
+                stumbles += ((events.get(k).type === 'stumble') ? 1 : 0);
+            }
+            events.clear();
+        }
+        return {death: sim.getDeath(), stumbles: stumbles, lane: sim.getRunner().lane};
+    })();
+    c.check('block, the same side twice: never through it, trip the second time', ((sameTwice.death === 'trip') && (sameTwice.stumbles === 1)), JSON.stringify(sameTwice));
     c.check('block, run into its front (K3: a block on lane 0): shock', (play(['K3'], [], 80).death === 'shock'));
 
     // Gap in the centre (G2: its hole aligned at a tile's start + 3.5 m): fall, or jump over it.
