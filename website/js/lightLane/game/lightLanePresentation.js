@@ -44,7 +44,9 @@ class LightLanePresentation {
             glowFarMax: LightLaneTuning.BLOOM_GLOW_FAR_MAX};   // RendererWebglBloom.DEFAULTS otherwise
         this._facing       = [0, 0, 0];   // the runner's rotation, degrees: facing +z, its lean in z
         // The runner's light (test, LightLaneTuning.RUNNER_LIGHT_ON): its position moved in place every frame.
-        this._light        = new Light([...LightLaneTuning.RUNNER_LIGHT_COLOR], (LightLaneTuning.RUNNER_LIGHT_RANGE * LightLaneTuning.RUNNER_HEIGHT / 2), [0, 0, 0]);
+        this._lightRange   = (LightLaneTuning.RUNNER_LIGHT_RANGE * LightLaneTuning.RUNNER_HEIGHT / 2);
+        this._light        = new Light([...LightLaneTuning.RUNNER_LIGHT_COLOR], this._lightRange, [0, 0, 0]);
+        this._deathLight   = null;    // {time, duration} from a death on: the light flares, then dies down
     }
 
     /**
@@ -134,6 +136,7 @@ class LightLanePresentation {
             slot.row = null;
         });
         this._hidden       = false;
+        this._deathLight   = null;
         this._facing[2]    = 0;
         this._stumbleUntil = 0;
         this._time         = 0;
@@ -178,6 +181,9 @@ class LightLanePresentation {
             this._animateRunner(dt);
             this._camera.follow(dt, simulation.getX(), simulation.getY(), simulation.getZ(), simulation.getRunner().getLaneSide());
             this._effects.update(dt, this._engine);
+            if (this._deathLight !== null) {
+                this._deathLight.time += dt;
+            }
         }
         this._engine.setBloom((lightLaneSettings.isBloomOn() && (this._rendererCode === LightLanePresentation.BLOOM_RENDERER)) ? this._bloom : null);
         this._draw();
@@ -235,6 +241,7 @@ class LightLanePresentation {
                     break;
                 case LightLaneEvents.DEATH:
                     this._effects.flash(LightLaneTuning.DEATH_FLASH[event.value]);
+                    this._deathLight = {time: 0, duration: LightLaneTuning.DYING_TIME[event.value]};
                     if (event.value === LightLaneRunner.DEATH_SHOCK) {
                         this._hidden = true;
                         this._effects.burst([runner.x, (runner.y + (LightLaneTuning.RUNNER_HEIGHT / 2)), this._simulation.getZ()], LightLaneTuning.SHARD_COUNT, LightLanePresentation.SHARD_PLAYER);
@@ -331,6 +338,7 @@ class LightLanePresentation {
         this._light.position[0] = runner.x;
         this._light.position[1] = (runner.y + (runner.getHeight() / 2));
         this._light.position[2] = this._simulation.getZ();
+        this._applyLightLevel();
         engine.drawInit();
         this._camera.setView(engine, this._effects.offset);
         engine.lightsCalculatePosition();
@@ -375,7 +383,7 @@ class LightLanePresentation {
             }
             // Under the runner's light (art § 2), by half tile (a mark every half tile shows it as a row): fine where the
             // light falls and the camera sees, one coarser row after, all the rest plain (user requests).
-            const lit = ((LightLaneTuning.RUNNER_LIGHT_ON) ? LightLanePresentation._litLevel(row, z, this._light.range) : null);
+            const lit = ((LightLaneTuning.RUNNER_LIGHT_ON) ? LightLanePresentation._litLevel(row, z, this._lightRange) : null);
             if (lit !== slot.lit) {
                 slot.lit = lit;
                 slot.tiles.forEach((tile, i) => tile.setObject(this._id(this._tileVariant(slot.codes[i], lit))));
@@ -458,6 +466,24 @@ class LightLanePresentation {
         instance.setRotation([0, ((LightLaneTuning.COIN_SPIN * this._time) % LightLanePresentation.FULL_TURN), 0]);
         instance.setRenderScale(1 + ((LightLaneTuning.COIN_TAKE_SCALE - 1) * taken));
         instance.setRenderLight(1 - taken);
+    }
+
+    // The runner's light: as it is, or after a death flaring to DEATH_LIGHT_PEAK in DEATH_LIGHT_RISE, then dying down to
+    // nothing by the end of the dying (user request); its range follows the flare.
+    _applyLightLevel() {
+        let level = 1;
+        if (this._deathLight !== null) {
+            const rise = LightLaneTuning.DEATH_LIGHT_RISE;
+            const peak = LightLaneTuning.DEATH_LIGHT_PEAK;
+            const t    = this._deathLight.time;
+            level = ((t < rise) ? (1 + ((peak - 1) * (t / rise))) : (peak * Math.max(0, (1 - ((t - rise) / Math.max(rise, (this._deathLight.duration - rise)))))));
+        }
+        const base = LightLaneTuning.RUNNER_LIGHT_COLOR;
+        for (let i = 0; i < 3; i++) {
+            this._light.color[i] = (base[i] * level);
+        }
+        const flare = Math.min(1, Math.max(0, ((level - 1) / (LightLaneTuning.DEATH_LIGHT_PEAK - 1))));
+        this._light.range = (this._lightRange * (1 + ((LightLaneTuning.DEATH_LIGHT_RANGE - 1) * flare)));
     }
 
     // A tile's object (plain or holed): its celled variant near the runner's light (LightLaneModels.LIT_LEVELS), else

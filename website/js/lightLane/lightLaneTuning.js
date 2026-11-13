@@ -88,6 +88,11 @@ LightLaneTuning.RUNNER_LIGHT_RANGE    = 2.0;
 // from the light, up to that many times lighter in it) and every other face keeps its look through its light group's
 // factor (LightLaneModels.LIGHT_GROUP) or its instance's render light.
 LightLaneTuning.AMBIENT_LIT           = [85, 85, 85];
+// At a death (user request), the runner's light flares to DEATH_LIGHT_PEAK times its colour and DEATH_LIGHT_RANGE times
+// its range in DEATH_LIGHT_RISE, then dies down to nothing by the end of the dying (DYING_TIME).
+LightLaneTuning.DEATH_LIGHT_PEAK      = 3;
+LightLaneTuning.DEATH_LIGHT_RANGE     = 1.5;
+LightLaneTuning.DEATH_LIGHT_RISE      = 0.12;
 LightLaneTuning.LIGHT_COMPENSATION    = (LightLaneTuning.RUNNER_LIGHT_ON ? (255 / LightLaneTuning.AMBIENT_LIT[0]) : 1);
 LightLaneTuning.TILE_TOP_CELL         = 0.5;
 // The tiles one tile further than the lit ones: their top in cells of TILE_MID_CELL (user request: an intermediate
