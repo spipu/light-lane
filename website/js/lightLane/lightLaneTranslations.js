@@ -194,6 +194,12 @@ class LightLaneTranslations {
                 it: 'Distanza',
                 es: 'Distancia'
             },
+            'scores.time': {
+                fr: 'Temps',
+                en: 'Time',
+                it: 'Tempo',
+                es: 'Tiempo'
+            },
             'scores.date': {
                 fr: 'Date',
                 en: 'Date',

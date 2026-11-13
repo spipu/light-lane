@@ -1,6 +1,7 @@
 /**
  * The end of a run (art § 10, modelled on RacingResultsModal), over the frozen scene: the title, the score, "New
- * record!" for a first place or the rank among the 10 best, then the best score, the distance and the coins; Play again
+ * record!" for a first place or the rank among the 10 best, then the best score, the distance, the coins and the time
+ * played; Play again
  * (selected), Best scores, Quit. Play again also answers Enter, the gamepad's validate (the list's own) and the jump
  * order (the game's, through replay()). Every input is ignored for GAME_OVER_INPUT_LOCK after it opens, so a key still
  * pressed when the runner died does not skip it. No way back: the back inputs are inert.
@@ -38,7 +39,7 @@ class LightLaneGameOverModal extends AppMenuAbstractListModal {
     }
 
     /**
-     * @param {{score: int, coins: int, distance: int}} run
+     * @param {{score: int, coins: int, distance: int, time: int}} run
      * @param {int|null} rank - among the 10 best, null when out of them
      * @param {int}      best - the best score after this run
      */
@@ -55,6 +56,7 @@ class LightLaneGameOverModal extends AppMenuAbstractListModal {
         this._addRow(table, appTranslator.get('over.best'), numbers.format(best));
         this._addRow(table, appTranslator.get('scores.distance'), metres.format(run.distance));
         this._addRow(table, appTranslator.get('scores.coins'), numbers.format(run.coins));
+        this._addRow(table, appTranslator.get('scores.time'), LightLaneHud.formatTime(run.time));
 
         const listEl = AppMenuDom.addElement(modal, 'div', 'app-menu-list app-menu-list-simple');
         this._nav.addItemIn(listEl, appTranslator.get('over.replay'), () => this.replay());

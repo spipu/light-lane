@@ -187,7 +187,8 @@ class LightLaneGame {
     // The run into the 10 best scores (if it enters them), then the modal with its rank (gameplay § 12).
     _gameOver() {
         const simulation = this._simulation;
-        const run        = {score: simulation.getScore().getScore(), coins: simulation.getScore().getCoins(), distance: Math.floor(simulation.getDistance())};
+        const run        = {score: simulation.getScore().getScore(), coins: simulation.getScore().getCoins(), distance: Math.floor(simulation.getDistance()),
+            time: Math.floor(simulation.getRunTime())};
         this._overPending = true;
         this._controls.setVirtualPadVisible(false);
         lightLaneScores.add(run).catch((error) => {

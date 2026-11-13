@@ -1,5 +1,5 @@
 /**
- * The 10 best runs of this device: rank, score, coins, distance, date; the run just over is highlighted. The bottom
+ * The 10 best runs of this device: rank, score, coins, distance, time played, date; the run just over is highlighted. The bottom
  * row holds Clear all (confirmed), then Back (as the best laps of Spipu-Racing).
  */
 class BestScoresScreen extends AbstractLightLaneMenuScreen {
@@ -61,6 +61,8 @@ class BestScoresScreen extends AbstractLightLaneMenuScreen {
                 AppMenuDom.addText(row, 'light-lane-scores-cell light-lane-scores-score', numbers.format(record.score));
                 AppMenuDom.addText(row, 'light-lane-scores-cell', numbers.format(record.coins));
                 AppMenuDom.addText(row, 'light-lane-scores-cell', metres.format(record.distance));
+                // A run saved before the time was kept has none.
+                AppMenuDom.addText(row, 'light-lane-scores-cell', ((record.time === undefined) ? BestScoresScreen.NO_TIME : LightLaneHud.formatTime(record.time)));
                 AppMenuDom.addText(row, 'light-lane-scores-cell', dates.format(new Date(record.date)));
             });
         }).catch((error) => this._failed(error));
@@ -77,4 +79,5 @@ class BestScoresScreen extends AbstractLightLaneMenuScreen {
     }
 }
 
-BestScoresScreen.COLUMNS = Object.freeze(['scores.rank', 'scores.score', 'scores.coins', 'scores.distance', 'scores.date']);
+BestScoresScreen.COLUMNS = Object.freeze(['scores.rank', 'scores.score', 'scores.coins', 'scores.distance', 'scores.time', 'scores.date']);
+BestScoresScreen.NO_TIME = '–';

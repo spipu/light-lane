@@ -433,7 +433,7 @@
 
 .light-lane-scores-row {
     display: grid;
-    grid-template-columns: 4em 1fr 1fr 1fr 1fr;
+    grid-template-columns: 4em 1fr 1fr 1fr 1fr 1fr;
     align-items: center;
     column-gap: 1em;
 }
@@ -483,15 +483,14 @@
     color: #E2F6FA;
 }
 
-/* Score 64 px, BEST 26 px under it, the block's bottom 112 px from the top. */
+/* Top right (user request): score 64 px, BEST 26 px and the time played under it, at the HUD margin. */
 .light-lane-hud-score-block {
     position: absolute;
-    left: 50%;
-    bottom: calc(100% - 10.37cqh);
-    transform: translateX(-50%);
+    top: 2.5cqh;
+    right: 3.9cqh;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-end;
     line-height: 1.1;
     text-shadow: 0 0 0.4em rgba(120, 214, 232, 0.55);
 }
@@ -511,6 +510,13 @@
 }
 
 /* 3, 2, 1, GO in 220 px; the HUD sets the zoom and the fade. */
+.light-lane-hud-time {
+    font-size: 2.41cqh;
+    letter-spacing: 0.12em;
+    color: #9FB3BA;
+    font-variant-numeric: tabular-nums;
+}
+
 .light-lane-hud-countdown {
     position: absolute;
     left: 50%;
@@ -523,11 +529,11 @@
     text-shadow: 0 0 0.25em rgba(120, 214, 232, 0.8);
 }
 
-/* At the place of the touch controls' pause button (LightLaneControls.VIRTUAL_PAD_BUTTONS.pause). */
+/* Top left (user request), at the place of the touch controls' pause button (LightLaneControls.VIRTUAL_PAD_BUTTONS). */
 .light-lane-hud-pause {
     position: absolute;
     top: 2.5cqh;
-    right: 3.9cqh;
+    left: 3.9cqh;
     width: 11.2cqh;
     height: 11.2cqh;
     padding: 2.4cqh;

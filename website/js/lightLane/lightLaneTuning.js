@@ -106,6 +106,9 @@ LightLaneTuning.LOD_COLORS            = Object.freeze({fine: [90, 22, 22], mid: 
 LightLaneTuning.BACKGROUND            = [10, 20, 24];
 LightLaneTuning.Z_NEAR                = 0.2;
 LightLaneTuning.Z_FAR                 = 140;
+// The bloom's halo keeps none of the depth shading (user request: the halo grows with the depth, the lines keep their
+// size): a distant line keeps its whole halo (RendererWebglBloom glowDepthShading).
+LightLaneTuning.BLOOM_GLOW_DEPTH_SHADING = 0;
 LightLaneTuning.DEPTH_SHADING         = Object.freeze({visibility: 50.7, visibilityMax: 10, shadeBase: 1.268, shadeScale: 0, rampCount: 32, strength: 1});
 
 // --- Palette (art § 3), 0-255 ---
@@ -132,10 +135,6 @@ LightLaneTuning.COLOR = Object.freeze({
 LightLaneTuning.LINE_SIZE         = 0.08;
 LightLaneTuning.LINE_SIZE_DECOR   = 0.05;
 LightLaneTuning.LINE_SIZE_FAR     = 0.20;
-LightLaneTuning.LINE_SIZE_DECOR_FAR = 0.12;
-// The track's lines far away: under LINE_FAR_PIXELS at 0.12 m too (a 0.12 m line is ½ px at 140 m on a 850 px canvas),
-// a third level (user request: the lane lines broke up in the distance).
-LightLaneTuning.LINE_SIZE_DECOR_FAR2 = 0.29;
 LightLaneTuning.LINE_OUTSET       = 0.01;
 // The far variant takes over when a line would be under LINE_FAR_PIXELS on screen, and gives way under
 // LINE_NEAR_RATIO × that distance.

@@ -14,21 +14,10 @@ class LightLaneModels {
         LightLaneModels.CODES.length = 0;
         LightLaneModels._lod = lod;
         const color = LightLaneTuning.COLOR;
-        const decor = [LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.LINE_SIZE_DECOR_FAR];
-        [false, true].forEach((far, i) => {
-            const suffix = ((far) ? LightLaneModels.FAR_SUFFIX : '');
-            LightLaneModels._load(LightLaneModels.TILE + suffix, LightLaneModels._tile(decor[i], null));
-            LightLaneModels._load(LightLaneModels.ROW3 + suffix, LightLaneModels._tile(decor[i], null, LightLaneTuning.LANES_3.length));
-            LightLaneModels._load(LightLaneModels.TILE_EDGE + suffix, LightLaneModels._tileEdge(decor[i]));
-        });
-        // The track's third level of lines, the farthest (LINE_SIZE_DECOR_FAR2).
-        const far2 = LightLaneModels.FAR2_SUFFIX;
-        LightLaneModels._load(LightLaneModels.TILE + far2, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR_FAR2, null));
-        LightLaneModels._load(LightLaneModels.ROW3 + far2, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR_FAR2, null, LightLaneTuning.LANES_3.length));
-        LightLaneModels._load(LightLaneModels.TILE_EDGE + far2, LightLaneModels._tileEdge(LightLaneTuning.LINE_SIZE_DECOR_FAR2));
-        for (const code of LightLaneModels.GAPS) {
-            LightLaneModels._load(LightLaneModels.gapTileCode(code) + far2, LightLaneModels._gapTile(LightLaneTuning.OBSTACLES[code], LightLaneTuning.LINE_SIZE_DECOR_FAR2, LightLaneTuning.LINE_SIZE_FAR, null));
-        }
+        // The track's tiles: one size of lines at any distance (user request).
+        LightLaneModels._load(LightLaneModels.TILE, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, null));
+        LightLaneModels._load(LightLaneModels.ROW3, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, null, LightLaneTuning.LANES_3.length));
+        LightLaneModels._load(LightLaneModels.TILE_EDGE, LightLaneModels._tileEdge(LightLaneTuning.LINE_SIZE_DECOR));
         const lines = [LightLaneTuning.LINE_SIZE, LightLaneTuning.LINE_SIZE_FAR];
         [false, true].forEach((far, i) => {
             const suffix = ((far) ? LightLaneModels.FAR_SUFFIX : '');
@@ -37,13 +26,13 @@ class LightLaneModels {
             for (const code of LightLaneModels.BLOCKS) {
                 LightLaneModels._load(LightLaneModels.blockCode(code) + suffix, LightLaneModels._block(LightLaneTuning.OBSTACLES[code].length, lines[i]));
             }
-            for (const code of LightLaneModels.GAPS) {
-                LightLaneModels._load(LightLaneModels.gapTileCode(code) + suffix, LightLaneModels._gapTile(LightLaneTuning.OBSTACLES[code], decor[i], lines[i], null));
-            }
         });
         LightLaneModels._load(LightLaneModels.COIN, LightLaneModels._coin());
         for (const [name, rgb] of Object.entries(LightLaneModels.SHARD_COLORS)) {
             LightLaneModels._load(LightLaneModels.SHARD + name, LightLaneModels._shard(color[rgb]));
+        }
+        for (const code of LightLaneModels.GAPS) {
+            LightLaneModels._load(LightLaneModels.gapTileCode(code), LightLaneModels._gapTile(LightLaneTuning.OBSTACLES[code], LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.LINE_SIZE, null));
         }
         // Under the runner's light, by half tile (a mark every half tile shows it as a row): the half the runner is on
         // in fine cells, the next half in coarser cells; holed tiles too (a gap is often met right under the light).
@@ -354,9 +343,8 @@ class LightLaneModels {
 
 LightLaneModels.ASSETS     = './assets/lightLane/';
 LightLaneModels.FAR_SUFFIX = 'Far';
-LightLaneModels.FAR2_SUFFIX = 'Far2';
-// The track's tiles by level of lines: near, far, farthest.
-LightLaneModels.TRACK_LEVELS = Object.freeze(['', 'Far', 'Far2']);
+// The track's tiles: one level of lines (index 0 only; the far ones went, user request).
+LightLaneModels.TRACK_LEVELS = Object.freeze(['']);
 LightLaneModels._lod       = false;
 // The codes of the objects built here (load()).
 LightLaneModels.CODES      = [];

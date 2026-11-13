@@ -1,7 +1,8 @@
 /**
- * The run's HUD (art § 9), DOM in the 1920 × 1080 letterbox, sized in cqh (css/lightLane.css): top centre the score,
- * the record under it; centre the countdown (3, 2, 1, GO, each zoomed from 0.8 to 1.0 then faded); top right the pause
- * button of the HUD, clickable with the mouse, hidden while the touch controls show their own at the same place;
+ * The run's HUD (art § 9), DOM in the 1920 × 1080 letterbox, sized in cqh (css/lightLane.css): top right the score,
+ * the record and the time played (mm:ss) under it; centre the countdown (3, 2, 1, GO, each zoomed from 0.8 to 1.0 then
+ * faded); top left the pause button of the HUD, clickable with the mouse, hidden while the touch controls show their
+ * own at the same place;
  * bottom centre the frame rate when the setting asks for it. The DOM is written only when a shown value changes.
  *
  * Plan step 11 adds the bonus gauges (top left) and the double score's colour.
@@ -70,6 +71,7 @@ class LightLaneHud extends AbstractHud {
         const best     = this._add(block, 'div', 'light-lane-hud-best');
         this._add(best, 'span', 'light-lane-hud-best-label', appTranslator.get('hud.best'));
         els.best       = this._add(best, 'span', 'light-lane-hud-best-value');
+        els.time       = this._add(block, 'div', 'light-lane-hud-time');
         els.countdown  = this._add(root, 'div', 'light-lane-hud-countdown');
         els.pause      = this._add(root, 'button', 'light-lane-hud-pause');
         els.pause.type = 'button';
@@ -89,9 +91,22 @@ class LightLaneHud extends AbstractHud {
         }
         this._text('score', this._numbers.format(this._simulation.getScore().getScore()));
         this._text('best', this._numbers.format(this._best));
+        this._text('time', LightLaneHud.formatTime(this._simulation.getRunTime()));
         this._display('pause', this._pauseShown);
         this._updateCountdown();
         this._updateFps();
+    }
+
+    /**
+     * @param {number} seconds
+     * @returns {string} mm:ss (minutes past 99 keep counting)
+     */
+    static formatTime(seconds) {
+        const total   = Math.floor(seconds);
+        const minutes = Math.floor(total / LightLaneHud.SECONDS_PER_MINUTE);
+        const rest    = (total % LightLaneHud.SECONDS_PER_MINUTE);
+
+        return (String(minutes).padStart(2, '0') + ':' + String(rest).padStart(2, '0'));
     }
 
     _updateCountdown() {
@@ -156,6 +171,7 @@ class LightLaneHud extends AbstractHud {
 
 // Test mode: the frame rate, then the shield's death count (not translated: a debug line).
 LightLaneHud.SHIELD_SEPARATOR = ' | shield deaths: ';
+LightLaneHud.SECONDS_PER_MINUTE = 60;
 // Countdown label: zoomed from ZOOM_FROM to 1 over the first ZOOM_SHARE of its time, faded out after FADE_FROM.
 LightLaneHud.ZOOM_FROM  = 0.8;
 LightLaneHud.ZOOM_SHARE = 0.5;

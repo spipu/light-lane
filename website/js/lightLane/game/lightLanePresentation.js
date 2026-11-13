@@ -34,8 +34,6 @@ class LightLanePresentation {
         this._fragileShown = false;
         this._time         = 0;
         this._rows         = [];      // pool slots: {row, codes: string[], tiles: Instance[], edge: Instance, far}
-        this._farDecor     = Infinity;
-        this._farDecor2    = Infinity;
         this._canvasWidth  = 0;
         this._farLines     = Infinity;
         this._ids          = new Map();   // object code → id
@@ -43,7 +41,7 @@ class LightLanePresentation {
         this._free         = new Map();   // object code → free instances
         this._frame        = 0;
         this._events       = [];      // the runner's clip events of a frame (footsteps: the sound, step 13)
-        this._bloom        = {};      // the bloom's parameters: RendererWebglBloom.DEFAULTS
+        this._bloom        = {glowDepthShading: LightLaneTuning.BLOOM_GLOW_DEPTH_SHADING};   // RendererWebglBloom.DEFAULTS otherwise
         this._facing       = [0, 0, 0];   // the runner's rotation, degrees: facing +z, its lean in z
         // The runner's light (test, LightLaneTuning.RUNNER_LIGHT_ON): its position moved in place every frame.
         this._light        = new Light([...LightLaneTuning.RUNNER_LIGHT_COLOR], (LightLaneTuning.RUNNER_LIGHT_RANGE * LightLaneTuning.RUNNER_HEIGHT / 2), [0, 0, 0]);
@@ -376,7 +374,9 @@ class LightLanePresentation {
                 slot.whole.setObject(this._id(this._tileVariant(LightLaneModels.ROW3, slot.far, slot.lit)));
                 slot.whole.placeAt(0, y, centre);
             }
-            const far = this._trackLevel(slot.far, Math.abs(centre - camZ));
+            // The track's lines keep their size at any distance (user request: no thicker lines far away; the halo
+            // grows instead).
+            const far = 0;
             // Under the runner's light (art § 2), by half tile (a mark every half tile shows it as a row): fine where the
             // light falls and the camera sees, one coarser row after, all the rest plain (user requests).
             const lit = ((LightLaneTuning.RUNNER_LIGHT_ON) ? LightLanePresentation._litLevel(row, z, this._light.range) : null);
@@ -467,13 +467,6 @@ class LightLanePresentation {
         return (code + LightLaneModels.TRACK_LEVELS[level]);
     }
 
-    // The level of a track tile's lines (0 near, 1 far, 2 farthest) at that distance, each switch with its hysteresis.
-    _trackLevel(level, distance) {
-        const far  = this._isFar((level >= 1), distance, this._farDecor);
-        const far2 = this._isFar((level >= 2), distance, this._farDecor2);
-
-        return ((far2) ? 2 : ((far) ? 1 : 0));
-    }
 
     // The distances of the far variants (art § 4), from the canvas' real width: again when it changes.
     _updateFarDistances() {
@@ -483,8 +476,6 @@ class LightLanePresentation {
         }
         this._canvasWidth = width;
         const focal       = (width / (2 * Math.tan(LightLaneTuning.CAMERA_FOV * Math.PI / LightLanePresentation.HALF_TURN)));
-        this._farDecor    = ((focal * LightLaneTuning.LINE_SIZE_DECOR) / LightLaneTuning.LINE_FAR_PIXELS);
-        this._farDecor2   = ((focal * LightLaneTuning.LINE_SIZE_DECOR_FAR) / LightLaneTuning.LINE_FAR_PIXELS);
         this._farLines    = ((focal * LightLaneTuning.LINE_SIZE) / LightLaneTuning.LINE_FAR_PIXELS);
     }
 

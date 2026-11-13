@@ -216,9 +216,10 @@ LightLaneControls.VIRTUAL_PAD_ICONS = {
     pause: {shapes: '<rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/>'}
 };
 
-// One button, in the top right corner at the HUD margin of 2.5 % of the height (x in widths: × 1080 / 1920).
+// One button, in the top left corner (user request) at the HUD margin of 2.5 % of the height (x in widths: × 1080 /
+// 1920).
 LightLaneControls.VIRTUAL_PAD_BUTTONS = {
-    pause: {x: 0.9069, y: 0.025, w: 0.079, h: 0.112, icon: 'pause'}
+    pause: {x: 0.0141, y: 0.025, w: 0.079, h: 0.112, icon: 'pause'}
 };
 
 LightLaneControls.VIRTUAL_PAD_LAYOUT = {

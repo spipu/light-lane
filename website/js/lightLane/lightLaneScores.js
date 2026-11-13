@@ -1,6 +1,6 @@
 /**
- * The 10 best runs of this device, kept in the `score` store of the lightlane database: score, coins, distance,
- * date. Without storage (a private window), the runs of the session are kept in memory only.
+ * The 10 best runs of this device, kept in the `score` store of the lightlane database: score, coins, distance, time
+ * played, date. Without storage (a private window), the runs of the session are kept in memory only.
  */
 class LightLaneScores {
     constructor() {
@@ -23,7 +23,8 @@ class LightLaneScores {
     }
 
     /**
-     * @returns {Promise<{id: int, score: int, coins: int, distance: int, date: string}[]>} best first, the oldest
+     * @returns {Promise<{id: int, score: int, coins: int, distance: int, time: (int|undefined), date: string}[]>} - time
+     *          (seconds played) absent from the runs saved before it was kept best first, the oldest
      *          first between equal scores
      */
     async list() {
@@ -33,12 +34,12 @@ class LightLaneScores {
     }
 
     /**
-     * @param {{score: int, coins: int, distance: int}} run
+     * @param {{score: int, coins: int, distance: int, time: int}} run - time: seconds played
      * @returns {Promise<{rank: int, id: int}|null>} its rank among the 10 best (1 = record) and its record's id, null
      *          when it does not enter them
      */
     async add(run) {
-        const record = {score: run.score, coins: run.coins, distance: run.distance, date: new Date().toISOString()};
+        const record = {score: run.score, coins: run.coins, distance: run.distance, time: run.time, date: new Date().toISOString()};
         const best   = await this.list();
         if ((best.length >= LightLaneScores.KEPT) && (LightLaneScores._compare(record, best[best.length - 1]) >= 0)) {
             return null;
