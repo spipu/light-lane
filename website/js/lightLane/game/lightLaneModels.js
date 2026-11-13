@@ -214,7 +214,10 @@ class LightLaneModels {
         }
         b.setFloor(true);
         // The top, half by half of the tile (its first half before z = 0, its second after), each plain or in cells.
-        for (const [half, from, to] of [[0, z0, Math.min(z1, 0)], [1, Math.max(z0, 0), z1]]) {
+        for (const [half, start, to] of [[0, z0, Math.min(z1, 0)], [1, Math.max(z0, 0), z1]]) {
+            // A floor mark starting the half is left out of the top: an opaque strip beside it, never over a see-through
+            // face (user request: the marks are not see-through).
+            const from = ((LightLaneModels._markAt(start, z0, z1)) ? (start + LightLaneTuning.TILE_MARK_WIDTH) : start);
             if (to <= from) {
                 continue;
             }
@@ -255,18 +258,25 @@ class LightLaneModels {
         return ((cell === null) ? colors.plain : ((cell === LightLaneTuning.TILE_TOP_CELL) ? colors.fine : colors.mid));
     }
 
-    // The cross marks of a tile's top between z0 and z1 (tile coordinates): painted strips of TILE_MARK_WIDTH lying
-    // TILE_MARK_RAISE over it, without glow (discreet, user request).
+    // A floor mark starts at z (every TILE_MARK_STEP from the tile's start) and fits in [z0, z1].
+    static _markAt(z, z0, z1) {
+        const step = ((z + (LightLaneTuning.TILE_LENGTH / 2)) / LightLaneTuning.TILE_MARK_STEP);
+
+        return ((Math.abs(step - Math.round(step)) < LightLaneModels.WALL_MIN) && (z >= z0) && ((z + LightLaneTuning.TILE_MARK_WIDTH) <= z1));
+    }
+
+    // The cross marks of a tile's top between z0 and z1 (tile coordinates): opaque painted strips of TILE_MARK_WIDTH in
+    // the top's level, which leaves them out, without glow (discreet, user request).
     static _marks(b, z0, z1, halfWidth = (LightLaneTuning.LANE_WIDTH / 2)) {
         const mark  = LightLaneTuning.COLOR.FLOOR_MARK;
         const w     = halfWidth;
-        const y     = (LightLaneTuning.TILE_THICKNESS + LightLaneTuning.TILE_MARK_RAISE);
+        const y     = LightLaneTuning.TILE_THICKNESS;
         const l     = (LightLaneTuning.TILE_LENGTH / 2);
         const width = LightLaneTuning.TILE_MARK_WIDTH;
-        // Painted on the floor: lit by the runner's light as the floor is.
+        // Painted on the floor: lit by the runner's light as the floor is; in the top's level, the top cut around it.
         b.setFloor(true);
         for (let z = -l; z < l; z += LightLaneTuning.TILE_MARK_STEP) {
-            if ((z >= z0) && ((z + width) <= z1)) {
+            if (LightLaneModels._markAt(z, z0, z1)) {
                 b.polygon([[-w, y, z], [-w, y, (z + width)], [w, y, (z + width)], [w, y, z]], mark);
             }
         }
@@ -385,6 +395,9 @@ class LightLaneModels {
             const x = (side * w);
             for (const [z0, z1] of walls) {
                 b.facing([[x, 0, z0], [x, h, z0], [x, h, z1], [x, 0, z1]], [(x + side), (h / 2), ((z0 + z1) / 2)], LightLaneModels._glass(color.BODY_SIDE));
+                // Its edge in neon too, as the hole's front and back (user request); centred on the lane line, which it
+                // covers (thicker).
+                b.line([x, h, z0], [x, h, z1], lineSize, color.LETHAL, [0, 1, 0], true);
             }
         }
 

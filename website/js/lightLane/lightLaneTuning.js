@@ -22,7 +22,6 @@ LightLaneTuning.TILE_ALPHA     = 0.8;
 // FLOOR_MARK, no glow.
 LightLaneTuning.TILE_MARK_STEP  = 5.0;
 LightLaneTuning.TILE_MARK_WIDTH = 0.10;
-LightLaneTuning.TILE_MARK_RAISE = 0.02;
 // The track is drawn this far behind and ahead of the runner (far plane, art § 2).
 LightLaneTuning.TRACK_BEHIND   = 10;
 LightLaneTuning.TRACK_AHEAD    = 140;
@@ -157,8 +156,8 @@ LightLaneTuning.FOG_BEHIND        = 20;
 LightLaneTuning.FOG_AHEAD         = 160;
 LightLaneTuning.FOG_HALF_WIDTH    = 220;
 LightLaneTuning.FOG_TILE          = Object.freeze([60, 30]);
-// The fog's texture darkened by a fifth (user request).
-LightLaneTuning.FOG_COLOR         = Object.freeze([204, 204, 204]);
+// The fog's texture darkened to 60 % (user requests: by a fifth, then a little more).
+LightLaneTuning.FOG_COLOR         = Object.freeze([153, 153, 153]);
 
 // --- Background: the user's picture of a city (.source/fond.png → assets/lightLane/textures/skyline.jpg) ---
 // Drawn by the engine's sky pass (Engine3d.setSky: before the geometry, by view angle, no depth shading). Its own
