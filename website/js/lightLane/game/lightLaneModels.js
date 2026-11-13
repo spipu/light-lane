@@ -349,23 +349,44 @@ class LightLaneModels {
         return b.data();
     }
 
-    // The fog plane under the track (user request): one flat quad, its top facing up, its texture the 60 frames played
-    // at FOG_FPS, repeated every FOG_TILE; one tile longer than the reach, so it can step by whole tiles.
+    // The fog plane under the track (user request): a grid of cells FOG_TILE large, the texture (the 60 frames played
+    // at FOG_FPS) mirrored every other cell across and along, so neighbour cells join without a seam (the picture does
+    // not tile); a cell edge on the track's axis, under the track. Its z runs from 0, two cells more than the reach, so
+    // it can step by a whole mirrored pair. Faces clockwise seen from above (the engine's front faces), as box()'s top.
     static _fog() {
         const [tileX, tileZ] = LightLaneTuning.FOG_TILE;
-        const w      = LightLaneTuning.FOG_HALF_WIDTH;
-        const length = (LightLaneTuning.FOG_BEHIND + LightLaneTuning.FOG_AHEAD + tileZ);
-        const u      = ((2 * w) / tileX);
-        const v      = (length / tileZ);
+        const across = Math.ceil(LightLaneTuning.FOG_HALF_WIDTH / tileX);
+        const along  = Math.ceil((LightLaneTuning.FOG_BEHIND + LightLaneTuning.FOG_AHEAD) / tileZ) + 2;
         const frames = [...Array(LightLaneTuning.FOG_FRAMES).keys()];
         const anim   = {ids: frames.map((i) => (i + 1)), duration: (1 / LightLaneTuning.FOG_FPS)};
-        const face   = (pts, map) => ({pts: pts, color: [255, 255, 255], texture: 1, map: map, textures: anim, lightGroup: LightLaneObjectBuilder.LIGHT_GROUP});
+        const points = [];
+        const faces  = [];
+        const point  = (x, z) => {
+            points.push([x, 0, z]);
+            return points.length;
+        };
+        const face = (pts, map) => ({pts: pts, color: [255, 255, 255], texture: 1, map: map, textures: anim, lightGroup: LightLaneObjectBuilder.LIGHT_GROUP});
+        for (let i = -across; i < across; i++) {
+            for (let j = 0; j < along; j++) {
+                const x0 = (i * tileX);
+                const x1 = (x0 + tileX);
+                const z0 = (j * tileZ);
+                const z1 = (z0 + tileZ);
+                // Mirrored every other cell: u (and v) run 0 → 1 then 1 → 0.
+                const [u0, u1] = (((i % 2) === 0) ? [0, 1] : [1, 0]);
+                const [v0, v1] = (((j % 2) === 0) ? [0, 1] : [1, 0]);
+                const a = point(x0, z0);
+                const b = point(x0, z1);
+                const c = point(x1, z1);
+                const d = point(x1, z0);
+                faces.push(face([a, b, c], [[u0, v0], [u0, v1], [u1, v1]]), face([a, c, d], [[u0, v0], [u1, v1], [u1, v0]]));
+            }
+        }
 
         return {
             textures: frames.map((i) => (LightLaneModels.ASSETS + 'textures/fog/fog_' + String(i).padStart(2, '0') + '.jpg')),
-            points:   [[-w, 0, 0], [-w, 0, length], [w, 0, length], [w, 0, 0]],
-            // Clockwise seen from above (the engine's front faces), as box()'s top.
-            faces:    [face([1, 2, 3], [[0, 0], [0, v], [u, v]]), face([1, 3, 4], [[0, 0], [u, v], [u, 0]])]
+            points:   points,
+            faces:    faces
         };
     }
 

@@ -394,11 +394,11 @@ class LightLanePresentation {
     }
 
 
-    // The fog plane under the track, stepped by whole tiles along the run: it stays put in the world.
+    // The fog plane under the track, stepped by whole mirrored pairs of cells along the run: it stays put in the world.
     _drawFog() {
-        const tileZ = LightLaneTuning.FOG_TILE[1];
-        const z     = this._simulation.getZ();
-        this._fog.placeAt(0, -LightLaneTuning.FOG_DEPTH, (Math.floor((z - LightLaneTuning.FOG_BEHIND) / tileZ) * tileZ));
+        const pair = (2 * LightLaneTuning.FOG_TILE[1]);
+        const z    = this._simulation.getZ();
+        this._fog.placeAt(0, -LightLaneTuning.FOG_DEPTH, (Math.floor((z - LightLaneTuning.FOG_BEHIND) / pair) * pair));
         this._engine.drawInstance(this._fog);
     }
 
