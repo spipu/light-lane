@@ -93,6 +93,9 @@ LightLaneTuning.TILE_TOP_CELL         = 0.5;
 // The tiles one tile further than the lit ones: their top in cells of TILE_MID_CELL (user request: an intermediate
 // level of detail before the finest).
 LightLaneTuning.TILE_MID_CELL         = 1.0;
+// Temporary (user request): under the test mode's fixed speed, holding TEST_FORWARD_KEY moves on at TEST_FORWARD_SPEED.
+LightLaneTuning.TEST_FORWARD_KEY      = 'KeyW';
+LightLaneTuning.TEST_FORWARD_SPEED    = 3;
 // The camera sees the ground this far behind the runner (art § 8): the fine cells start there.
 LightLaneTuning.GROUND_SEEN_BEHIND    = 1.1;
 // The test mode's `lod`: the tiles' tops coloured by level: fine cells red, coarser cells green, every other top blue.

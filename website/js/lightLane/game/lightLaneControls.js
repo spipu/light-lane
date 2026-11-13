@@ -96,6 +96,14 @@ class LightLaneControls {
     }
 
     /**
+     * @param {string} code - a KeyboardEvent.code
+     * @returns {boolean} that key is held (the test mode's own keys)
+     */
+    readKey(code) {
+        return this._keyboard.readKey(code);
+    }
+
+    /**
      * @returns {{x: number, y: number}} the gamepad stick written into out (x right +, y up +), 0 off the gamepad
      */
     readStick(out) {
