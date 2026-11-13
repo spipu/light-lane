@@ -81,6 +81,8 @@ class LightLanePresentation {
             lit:   null,
             tiles: LightLaneTuning.LANES_3.map(() => LightLanePresentation.instance(this._id(LightLaneModels.TILE))),
             edge:  LightLanePresentation.instance(this._id(LightLaneModels.TILE_EDGE)),
+            whole: LightLanePresentation.instance(this._id(LightLaneModels.ROW3)),
+            gaps:  false,
             far:   false
         }));
         this._backdrop = LightLanePresentation.instance(this._id(LightLaneModels.BACKDROP));
@@ -338,14 +340,18 @@ class LightLanePresentation {
             const start  = (row * length);
             const centre = (start + (length / 2));
             if (slot.row !== row) {
-                slot.row = row;
+                slot.row  = row;
+                slot.gaps = false;
                 lanes.forEach((lane, i) => {
                     const gap = track.gapIn(lane, start);
+                    slot.gaps     = (slot.gaps || (gap !== null));
                     slot.codes[i] = ((gap !== null) ? LightLaneModels.gapTileCode(gap) : LightLaneModels.TILE);
                     slot.tiles[i].setObject(this._id(this._tileVariant(slot.codes[i], slot.far, slot.lit)));
                     slot.tiles[i].placeAt((lane * LightLaneTuning.LANE_WIDTH), y, centre);
                 });
                 slot.edge.placeAt((lanes[lanes.length - 1] * LightLaneTuning.LANE_WIDTH), y, centre);
+                slot.whole.setObject(this._id(this._tileVariant(LightLaneModels.ROW3, slot.far, slot.lit)));
+                slot.whole.placeAt(0, y, centre);
             }
             const far = this._isFar(slot.far, Math.abs(centre - camZ), this._farDecor);
             // Under the runner's light (art § 2), by half tile (a mark every half tile shows it as a row): fine where the
@@ -356,6 +362,12 @@ class LightLanePresentation {
                 slot.lit = lit;
                 slot.tiles.forEach((tile, i) => tile.setObject(this._id(this._tileVariant(slot.codes[i], far, lit))));
                 slot.edge.setObject(this._id(LightLaneModels.TILE_EDGE + ((far) ? LightLaneModels.FAR_SUFFIX : '')));
+                slot.whole.setObject(this._id(this._tileVariant(LightLaneModels.ROW3, far, lit)));
+            }
+            // A row without a gap is one tile across its lanes (no separation between them); with a gap, a tile a lane.
+            if (!slot.gaps) {
+                engine.drawInstance(slot.whole);
+                continue;
             }
             for (const tile of slot.tiles) {
                 engine.drawInstance(tile);
@@ -442,8 +454,9 @@ class LightLanePresentation {
     }
 
     /**
-     * The fine halves: every half tile the runner's light reaches that the camera sees (from GROUND_SEEN_BEHIND behind
-     * the runner to the light's range ahead), one or two; then one coarser half; the rest plain.
+     * The fine halves: every half tile the runner's light reaches, or soon will, that the camera sees (from
+     * GROUND_SEEN_BEHIND behind the runner to the light's range + FINE_AHEAD_MARGIN ahead), one or two; then one coarser
+     * half; the rest plain.
      *
      * @param {int}    row   - a tile's row
      * @param {number} z     - the runner's z
@@ -453,7 +466,7 @@ class LightLanePresentation {
     static _litLevel(row, z, reach) {
         const size  = (LightLaneTuning.TILE_LENGTH / 2);
         const first = Math.floor((z - LightLaneTuning.GROUND_SEEN_BEHIND) / size);
-        const last  = Math.floor((z + reach) / size);
+        const last  = Math.floor((z + reach + LightLaneTuning.FINE_AHEAD_MARGIN) / size);
         const level = (h) => (((h >= first) && (h <= last)) ? 'F' : ((h === (last + 1)) ? 'M' : 'P'));
         const code  = (level(2 * row) + level((2 * row) + 1));
 

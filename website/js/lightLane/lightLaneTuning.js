@@ -98,6 +98,9 @@ LightLaneTuning.TEST_FORWARD_KEY      = 'KeyW';
 LightLaneTuning.TEST_FORWARD_SPEED    = 3;
 // The camera sees the ground this far behind the runner (art § 8): the fine cells start there.
 LightLaneTuning.GROUND_SEEN_BEHIND    = 1.1;
+// The fine cells reach this far past the light's range, so a half tile is fine before the light comes onto it (user
+// request: the switch came too close to the runner).
+LightLaneTuning.FINE_AHEAD_MARGIN     = 3.0;
 // The test mode's `lod`: the tiles' tops coloured by level: fine cells red, coarser cells green, every other top blue.
 LightLaneTuning.LOD_COLORS            = Object.freeze({fine: [90, 22, 22], mid: [22, 80, 26], plain: [22, 30, 90]});
 LightLaneTuning.BACKGROUND            = [10, 20, 24];
