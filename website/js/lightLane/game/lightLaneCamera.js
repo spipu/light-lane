@@ -86,6 +86,11 @@ class LightLaneCamera {
         return this._z;
     }
 
+    // Degrees, about the view axis (setView's matrixRotateZ).
+    getRoll() {
+        return this._roll;
+    }
+
     static _height(feet) {
         return Math.max((LightLaneTuning.CAMERA_HEIGHT_BASE + (LightLaneTuning.CAMERA_HEIGHT_FEET * feet)), (feet + LightLaneTuning.CAMERA_ABOVE_FEET));
     }

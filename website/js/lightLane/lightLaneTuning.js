@@ -142,17 +142,18 @@ LightLaneTuning.LINE_OUTSET       = 0.01;
 LightLaneTuning.LINE_FAR_PIXELS   = 1.5;
 LightLaneTuning.LINE_NEAR_RATIO   = 0.9;
 // --- Background: the user's picture of a city (.source/fond.png → assets/lightLane/textures/skyline.jpg) ---
-// Drawn by the engine's sky pass (Engine3d.setSky: before the geometry, by view angle, no depth shading). The
-// horizon sits 8° under the top of the screen: the picture's spire tip (SKY_TIP_ROW) at SKY_TIP_ELEVATION, its
-// city base (SKY_HORIZON_ROW) on the horizon, its width spread over SKY_SPAN degrees; it slides SKY_PARALLAX degrees
-// a metre the camera goes across (user request: it moves slightly with the lane).
+// Drawn by the engine's sky pass (Engine3d.setSky: before the geometry, by view angle, no depth shading). Its own
+// proportions (user request: not squashed): SKY_SPAN degrees across its width, as many a pixel upwards; the luminous
+// base of its central building (SKY_HORIZON_ROW) exactly on the track's far end, kept there (user requests): that end
+// lies SKY_DISTANCE = TRACK_AHEAD + CAMERA_BACK ahead of the camera, so it is seen atan(camera y / SKY_DISTANCE) under
+// the horizon and atan(−camera x / SKY_DISTANCE) aside; the picture follows both every frame (the lane, the jump) and
+// leans with the camera's roll.
 LightLaneTuning.SKY_URL           = 'textures/skyline.jpg';
+LightLaneTuning.SKY_WIDTH_PX      = 2172;
 LightLaneTuning.SKY_HEIGHT_PX     = 724;
-LightLaneTuning.SKY_HORIZON_ROW   = 668;
-LightLaneTuning.SKY_TIP_ROW       = 324;
-LightLaneTuning.SKY_TIP_ELEVATION = 6;
-LightLaneTuning.SKY_SPAN          = 90;
-LightLaneTuning.SKY_PARALLAX      = 0.75;
+LightLaneTuning.SKY_HORIZON_ROW   = 636;
+LightLaneTuning.SKY_SPAN          = 74;
+LightLaneTuning.SKY_DISTANCE      = (LightLaneTuning.TRACK_AHEAD + LightLaneTuning.CAMERA_BACK);
 
 // --- Commands (gameplay § 10) ---
 // Gamepad stick: the dominant axis past STICK_TRIGGER makes an order; re-armed once both axes are under STICK_REARM.

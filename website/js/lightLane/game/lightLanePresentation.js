@@ -194,10 +194,10 @@ class LightLanePresentation {
         }
     }
 
-    // The background picture as the engine's sky: its spire tip at SKY_TIP_ELEVATION, its city base on the horizon,
-    // its width over SKY_SPAN degrees (elevations in radians).
+    // The background picture as the engine's sky, in its own proportions: SKY_SPAN degrees across, as many a pixel
+    // upwards, SKY_HORIZON_ROW on the horizon (elevations in radians).
     static _sky() {
-        const perRow = ((LightLaneTuning.SKY_TIP_ELEVATION * Math.PI / LightLanePresentation.HALF_TURN) / (LightLaneTuning.SKY_HORIZON_ROW - LightLaneTuning.SKY_TIP_ROW));
+        const perRow = ((LightLaneTuning.SKY_SPAN * Math.PI / LightLanePresentation.HALF_TURN) / LightLaneTuning.SKY_WIDTH_PX);
 
         return {
             loaderId:    LightLaneModels.skyId(),
@@ -205,7 +205,7 @@ class LightLanePresentation {
             top:         (LightLaneTuning.SKY_HORIZON_ROW * perRow),
             bottom:      (-(LightLaneTuning.SKY_HEIGHT_PX - LightLaneTuning.SKY_HORIZON_ROW) * perRow),
             mirrorBelow: false,
-            followRoll:  false
+            followRoll:  true
         };
     }
 
@@ -322,11 +322,14 @@ class LightLanePresentation {
 
     _draw() {
         const engine = this._engine;
-        // The sky pass reads the view's angles (Engine3d.setCamera fills them; this camera sets the matrix itself): the
-        // pitch, and a yaw from the camera's x for the background's slide with the lane.
-        engine.viewPitch = LightLaneTuning.CAMERA_PITCH;
-        // The picture's middle (its spire) straight ahead: the sky starts its texture at yaw 0, half a span to the left.
-        engine.viewYaw   = ((LightLaneTuning.SKY_SPAN / 2) + (this._camera.getX() * LightLaneTuning.SKY_PARALLAX));
+        // The sky pass reads the view's angles (Engine3d.setCamera fills them; this camera sets the matrix itself):
+        // the picture's anchor (its central building's base) kept on the track's far end, SKY_DISTANCE ahead — seen
+        // atan(y / d) under the horizon (a higher camera, in a jump, sees it lower) and atan(−x / d) aside; its middle
+        // straight ahead (the sky starts its texture at yaw 0, half a span to the left).
+        const toDegrees = (LightLanePresentation.HALF_TURN / Math.PI);
+        engine.viewPitch = (LightLaneTuning.CAMERA_PITCH + (Math.atan(this._camera.getY() / LightLaneTuning.SKY_DISTANCE) * toDegrees));
+        engine.viewYaw   = ((LightLaneTuning.SKY_SPAN / 2) + (Math.atan(this._camera.getX() / LightLaneTuning.SKY_DISTANCE) * toDegrees));
+        engine.viewRoll  = (LightLanePresentation.SKY_ROLL_SIGN * this._camera.getRoll());
         const runner = this._simulation.getRunner();
         this._light.position[0] = runner.x;
         this._light.position[1] = (runner.y + (runner.getHeight() / 2));
@@ -582,5 +585,7 @@ LightLanePresentation.COIN_HALF_HEIGHT = 0.16;
 LightLanePresentation.BOB_PHASE_STEP  = 1.7;
 // Rotation about z that leans the runner towards a move to the right (Instance.setRotation's sign).
 LightLanePresentation.LEAN_SIGN       = -1;
+// The sky pass's roll against the camera's matrixRotateZ (the picture leans with the track).
+LightLanePresentation.SKY_ROLL_SIGN   = 1;
 // The bloom works with the WebGL renderer only.
 LightLanePresentation.BLOOM_RENDERER  = 'webgl';
