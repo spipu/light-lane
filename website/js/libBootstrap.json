@@ -1,5 +1,5 @@
 {
-    "version": "v0.0075",
+    "version": "v0.0078",
     "files": {
         "assets": [
             "/assets/lightLane/models/runner.bin",
@@ -178,11 +178,13 @@
             "/js/lightLane/game/lightLaneCommandSampler.js",
             "/js/lightLane/game/lightLaneRunScore.js",
             "/js/lightLane/game/lightLaneRandom.js",
+            "/js/lightLane/game/lightLaneDifficulty.js",
             "/js/lightLane/game/lightLanePatterns.js",
             "/js/lightLane/game/lightLaneEntity.js",
             "/js/lightLane/game/lightLaneEvents.js",
             "/js/lightLane/game/lightLaneRunner.js",
             "/js/lightLane/game/lightLaneCollision.js",
+            "/js/lightLane/game/lightLaneOccupancy.js",
             "/js/lightLane/game/lightLaneTrackGenerator.js",
             "/js/lightLane/game/lightLaneSimulation.js",
             "/js/lightLane/game/lightLaneObjectBuilder.js",

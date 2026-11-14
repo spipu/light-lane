@@ -13,12 +13,14 @@ const SOURCES     = [
     'js/lightLane/lightLaneTuning.js',
     'js/lightLane/game/lightLaneCommandSampler.js',
     'js/lightLane/game/lightLaneRandom.js',
+    'js/lightLane/game/lightLaneDifficulty.js',
     'js/lightLane/game/lightLanePatterns.js',
     'js/lightLane/game/lightLaneEntity.js',
     'js/lightLane/game/lightLaneEvents.js',
     'js/lightLane/game/lightLaneRunScore.js',
     'js/lightLane/game/lightLaneRunner.js',
     'js/lightLane/game/lightLaneCollision.js',
+    'js/lightLane/game/lightLaneOccupancy.js',
     'js/lightLane/game/lightLaneTrackGenerator.js',
     'js/lightLane/game/lightLaneSimulation.js',
 ];
@@ -40,7 +42,7 @@ function ordered() {
 
 function load() {
     const ctx = vm.createContext({
-        console, Math, Object, Array, Map, Set, Error, Number, String, Date, JSON, Infinity,
+        console, Math, Object, Array, Map, Set, Error, Number, String, Date, JSON, Infinity, Uint8Array, Int32Array,
         AppInputSwipe: {LEFT: 'left', RIGHT: 'right', UP: 'up', DOWN: 'down'}
     });
     for (const file of ordered()) {

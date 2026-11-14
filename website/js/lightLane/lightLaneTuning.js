@@ -27,16 +27,22 @@ LightLaneTuning.TRACK_BEHIND = 10;
 LightLaneTuning.TRACK_AHEAD  = 140;
 
 // --- Difficulty (gameplay § 9.1): start distance (m) and target speed (m/s) of each tier ---
+// Tiers 0 and 1 run at the speed the start's rise ends at; tiers 2 to 7 climb evenly from there to 21.5 m/s (user decision).
 LightLaneTuning.TIERS = [
-    {from: 0,    speed: 11.0},
-    {from: 300,  speed: 12.5},
-    {from: 700,  speed: 14.0},
-    {from: 1200, speed: 15.5},
-    {from: 1800, speed: 17.0},
-    {from: 2500, speed: 18.5},
-    {from: 3300, speed: 20.0},
+    {from: 0,    speed: 15.0},
+    {from: 300,  speed: 15.0},
+    {from: 700,  speed: 16.1},
+    {from: 1200, speed: 17.2},
+    {from: 1800, speed: 18.3},
+    {from: 2500, speed: 19.4},
+    {from: 3300, speed: 20.5},
     {from: 4200, speed: 21.5},
 ];
+// The start of a run (user decision): from START_SPEED_FROM to START_SPEED_TO over the first START_LENGTH metres, quick at
+// first then levelling off (LightLaneDifficulty.startSpeed); no tier ramp meanwhile.
+LightLaneTuning.START_SPEED_FROM = 10.0;
+LightLaneTuning.START_SPEED_TO   = 15.0;
+LightLaneTuning.START_LENGTH     = 500;
 // Tiers 8 to TIER_LAST: one every TIER_LATE_LENGTH metres after tier 7, TIER_LATE_SPEED_STEP faster, up to SPEED_MAX
 // (user decision: 35 m/s, reached at tier 21, 18 200 m, about 13 min of running).
 LightLaneTuning.TIER_LATE_LENGTH     = 1000;
@@ -57,9 +63,11 @@ LightLaneTuning.COUNTDOWN_GO_TIME    = 0.4;
 LightLaneTuning.RUNNER_LEAN      = 12;
 LightLaneTuning.RUNNER_LEAN_TIME = 0.06;
 LightLaneTuning.FADE_SHORT_CLIP  = 0.12;
+// With the jump boots, the jump clip is played slower to last the longer jump (jumpHigh, art § 6.2).
+LightLaneTuning.JUMP_HIGH_PACE   = 0.79;
 // Playback speed of run: min(RUN_PACE_BASE + (v − RUN_PACE_FROM) / RUN_PACE_SPAN × RUN_PACE_GAIN, RUN_PACE_MAX).
 LightLaneTuning.RUN_PACE_BASE = 1.0;
-LightLaneTuning.RUN_PACE_FROM = 11;
+LightLaneTuning.RUN_PACE_FROM = 10;
 LightLaneTuning.RUN_PACE_SPAN = 15;
 LightLaneTuning.RUN_PACE_GAIN = 0.8;
 LightLaneTuning.RUN_PACE_MAX  = 1.8;
@@ -140,6 +148,10 @@ LightLaneTuning.COLOR = Object.freeze({
 LightLaneTuning.LINE_SIZE       = 0.08;
 LightLaneTuning.LINE_SIZE_DECOR = 0.05;
 LightLaneTuning.LINE_OUTSET     = 0.01;
+// Marks laid on the floor (the warning zone's chevrons) stand this far above the tiles' top (art § 4).
+LightLaneTuning.FLOOR_LIFT      = 0.02;
+// The warning zone's chevron (art § 5.2 arrow), [across, along], m.
+LightLaneTuning.ARROW_SIZE      = Object.freeze([1.2, 0.8]);
 // --- Fog under the track: the user's 60 frames (.source/fog/buildFog.py → assets/lightLane/textures/fog/) ---
 // A plane FOG_DEPTH under the track, from FOG_BEHIND behind the runner to FOG_AHEAD ahead, FOG_HALF_WIDTH aside, its
 // texture repeated every FOG_TILE ([across, along] metres) and played at FOG_FPS (user request); the plane steps by
@@ -191,6 +203,8 @@ LightLaneTuning.STUMBLE_SLOW_TIME   = 1.0;
 LightLaneTuning.STUMBLE_RAMP_TIME   = 0.5;
 LightLaneTuning.FRAGILE_TIME        = 5.0;
 LightLaneTuning.STUMBLE_SHAKE       = Object.freeze({amplitude: 0.08, time: 0.25});
+// Past the track's edge (an outer lane that ended), feet at or under this height: the runner falls (as in a gap's box).
+LightLaneTuning.VOID_FEET           = 0.05;
 
 // --- Fixed obstacles (gameplay § 4): collision box across (±x), height (y0..y1), depth from the front face
 // (z0..z1; a negative z1 counts from the element's length: L − |z1|), drawn depth. ---
@@ -269,6 +283,68 @@ LightLaneTuning.PATTERN_RECENT_SPARE  = 2;
 LightLaneTuning.PATTERN_MIRROR_CHANCE = 0.5;
 // Gap between rows, s, by tier (gameplay § 9.1); tiers past the table keep the last.
 LightLaneTuning.ROW_GAPS = Object.freeze([1.90, 1.70, 1.50, 1.35, 1.20, 1.10, 1.00, 0.90]);
+// A tier's first BREATH_LENGTH metres keep the catalogue of the tier before (gameplay § 9.2); its patterns then come in
+// with a weight factor from INTRO_FACTOR to 1 over INTRO_LENGTH metres.
+LightLaneTuning.BREATH_LENGTH = 150;
+LightLaneTuning.INTRO_LENGTH  = 400;
+LightLaneTuning.INTRO_FACTOR  = 0.3;
+// A row is drawn again at most ROW_TRIES times when the fairness check refuses it (generation § 4.5), then left empty.
+LightLaneTuning.ROW_TRIES = 8;
+
+// --- Sections (generation § 3) ---
+LightLaneTuning.SECTION_FIRST       = 400;
+LightLaneTuning.SECTION_STEP        = 10;
+LightLaneTuning.SECTION_3_MIN       = 250;
+LightLaneTuning.SECTION_3_MAX       = 500;
+LightLaneTuning.SECTION_5_MIN       = 150;
+LightLaneTuning.SECTION_5_MAX       = 300;
+// The first section of 5 lanes, forced FIVE_FIRST_AFTER into tier FIVE_TIER, FIVE_FIRST_LENGTH long.
+LightLaneTuning.FIVE_TIER           = 2;
+LightLaneTuning.FIVE_FIRST_AFTER    = 150;
+LightLaneTuning.FIVE_FIRST_LENGTH   = 200;
+// Chance of a section of 5 lanes after one of 3: FIVE_CHANCE at tier FIVE_TIER, + FIVE_CHANCE_STEP a tier, FIVE_CHANCE_MAX.
+LightLaneTuning.FIVE_CHANCE         = 0.35;
+LightLaneTuning.FIVE_CHANCE_STEP    = 0.05;
+LightLaneTuning.FIVE_CHANCE_MAX     = 0.60;
+// Before the outer lanes end: the warning zone, WARN_TIME × the target speed (from its tile's start), and in its last
+// CLEAR_TIME × the target speed the lanes −1 and +1 kept free.
+LightLaneTuning.WARN_TIME           = 2.5;
+LightLaneTuning.CLEAR_TIME          = 1.2;
+// The warning zone's red edges blink at this rate (art § 5.2, tileWarn).
+LightLaneTuning.WARN_BLINK_HZ       = 4;
+
+// --- Fairness check (generation § 8) ---
+LightLaneTuning.FAIR_REACTION    = 0.45;
+LightLaneTuning.FAIR_GATE_SLIDE  = 0.70;
+// From tier 1 the jump boots can be on: a jump lasts JUMP_TIME_BOOTS; at tier 0 JUMP_TIME.
+LightLaneTuning.FAIR_BOOTS_TIER  = 1;
+
+// --- First encounters (generation § 6): the row of each novelty, ENCOUNTER_AFTER into its tier ---
+LightLaneTuning.ENCOUNTER_AFTER = 150;
+LightLaneTuning.ENCOUNTERS      = Object.freeze([
+    Object.freeze({tier: 1, pattern: 'N1'}),
+    Object.freeze({tier: 4, pattern: 'G2'}),
+]);
+// The gaps before and after a first encounter's row, times the normal one.
+LightLaneTuning.ENCOUNTER_GAP = 1.5;
+
+// --- Bonuses (generation § 7.1; their effects come with plan step 12) ---
+// The first, a magnet on lane 0 with no obstacle, BONUS_FIRST_AFTER into tier 1; then every BONUS_EVERY metres
+// ([min, max] by tier from its `from`).
+LightLaneTuning.BONUS_FIRST_TIER  = 1;
+LightLaneTuning.BONUS_FIRST_AFTER = 230;
+LightLaneTuning.BONUS_FIRST_TYPE  = 'magnet';
+LightLaneTuning.BONUS_EVERY       = Object.freeze([
+    Object.freeze({from: 1, min: 400, max: 650}),
+    Object.freeze({from: 4, min: 550, max: 900}),
+]);
+// Draw weights; flight comes with plan step 12 (its reservations, generation § 7.1).
+LightLaneTuning.BONUS_TYPES  = Object.freeze({double: 25, magnet: 25, shield: 20, boots: 15});
+LightLaneTuning.BONUS_HEIGHT = 0.9;
+
+// --- Scenery zones (generation § 7.3; drawn from plan step 13) ---
+LightLaneTuning.ZONE_LENGTH = 800;
+LightLaneTuning.ZONES       = Object.freeze(['grid', 'hex', 'dots', 'arches']);
 
 // --- Effects (art § 7) ---
 LightLaneTuning.SHARD_COUNT      = 48;

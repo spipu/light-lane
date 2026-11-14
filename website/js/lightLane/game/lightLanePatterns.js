@@ -2,7 +2,9 @@
  * The catalogue of row patterns (generation § 4.3, § 4.4): Id, the elements by lane from left to right ('.' free; the
  * codes of LightLaneTuning.OBSTACLES; 'R' prowler; 'T<' / 'T>' stalker), the lowest tier, the weight, and the coins
  * the pattern carries (arc over its hurdle, a line, coins at its centre). A pattern of 3 lanes is laid on 3 consecutive
- * lanes; the centre element of a corridor (K4, K5, G4) is centred along its blocks.
+ * lanes; the centre element of a corridor (K4, K5, G4) is centred along its blocks. Each pattern keeps its mirrored
+ * lanes (built once: the generator allocates nothing per row). A pattern of weight 0 is never drawn: a first encounter's
+ * row only (generation § 6).
  */
 class LightLanePatterns {
     /**
@@ -20,8 +22,18 @@ class LightLanePatterns {
     static mirror(lanes) {
         return lanes.slice().reverse().map((code) => ((code === 'T<') ? 'T>' : ((code === 'T>') ? 'T<' : code)));
     }
+
+    /**
+     * @param {string} code - an element of a pattern
+     * @returns {boolean} an enemy (prowler, stalker), not an obstacle of LightLaneTuning.OBSTACLES
+     */
+    static isEnemy(code) {
+        return LightLanePatterns.ENEMIES.includes(code);
+    }
 }
 
+// The enemies' codes: rows holding one are left out of the draw until plan step 11 brings the enemies.
+LightLanePatterns.ENEMIES = Object.freeze(['R', 'T<', 'T>']);
 // [Id, elements, tier, weight, coins: 'arc' over the hurdle, 'line' on the free centre, 'centre' along the corridor]
 LightLanePatterns.TABLE = Object.freeze([
     ['S1', 'H . .', 0, 10], ['S2', '. H .', 0, 10], ['S3', 'P . .', 0, 10], ['S4', '. P .', 0, 10],
@@ -36,18 +48,22 @@ LightLanePatterns.TABLE = Object.freeze([
     ['M1', 'R X3 P', 7, 3], ['M2', 'B10 H R', 7, 3], ['M3', 'P R X3', 7, 3],
     ['F1', 'H . P . H', 2, 6], ['F2', 'B6 . B6 . B6', 2, 5], ['F3', '. H H H .', 2, 5], ['F4', 'P P . P P', 2, 4],
     ['F5', 'R . . . R', 3, 5], ['F6', 'B10 . R . B10', 3, 3], ['F7', 'X3 . H . X3', 4, 4], ['F8', 'T> . B6 . T<', 5, 3],
+    // First encounters only (generation § 6), never drawn.
+    ['N0', '. . .', 1, 0], ['N1', '. B6 .', 1, 0],
 ].map(([id, elements, tier, weight, coins]) => {
-    const lanes = elements.split(' ');
+    const lanes   = elements.split(' ');
+    const longest = Math.max(0, ...lanes.map((code) => (((code === '.') || LightLanePatterns.ENEMIES.includes(code)) ? 0 : LightLaneTuning.OBSTACLES[code].length)));
 
     return Object.freeze({
         id:       id,
         lanes:    Object.freeze(lanes),
+        mirrored: Object.freeze(LightLanePatterns.mirror(lanes)),
         tier:     tier,
         weight:   weight,
         coins:    (coins ?? null),
-        corridor: ((lanes.length === 3) && lanes[0].startsWith('B') && (lanes[0] === lanes[2]) && (lanes[1] !== '.'))
+        corridor: ((lanes.length === 3) && lanes[0].startsWith('B') && (lanes[0] === lanes[2]) && (lanes[1] !== '.')),
+        enemy:    lanes.some((code) => LightLanePatterns.ENEMIES.includes(code)),
+        longest:  longest
     });
 }));
 LightLanePatterns.BY_ID = new Map(LightLanePatterns.TABLE.map((pattern) => [pattern.id, pattern]));
-// The enemies' codes: rows holding one are left out of the draw until plan step 11 brings the enemies.
-LightLanePatterns.ENEMIES = Object.freeze(['R', 'T<', 'T>']);

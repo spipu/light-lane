@@ -2,11 +2,10 @@
  * What the run shows (modelled on RacingPresentation): the screen and the engine on the renderer of the settings
  * (built again when the pause options change it: a canvas keeps one context type), the scene light and depth shading
  * of art § 2, the bloom when the setting asks for it (WebGL only), the camera (LightLaneCamera), the HUD
- * (LightLaneHud), the effects (LightLaneEffects), the track's tiles from pools of instances (holed under a gap), one
- * instance per element of the track (pooled by object, linked to its entity by serial), the runner, its clips and its
- * fragile blink. It reads the simulation and plays its events; it never writes the simulation.
- *
- * Plan step 8: 3 lanes; the sections of 5 lanes come with step 10.
+ * (LightLaneHud), the effects (LightLaneEffects), the track's tiles from pools of instances (3 or 5 lanes, holed under a
+ * gap with the hole's walls beside, the warning zone's blinking red edges and chevrons), one instance per element of
+ * the track (pooled by object, linked to its entity by serial), the runner, its clips and its fragile blink. It reads
+ * the simulation and plays its events; it never writes the simulation. Bonuses are drawn from plan step 12.
  */
 class LightLanePresentation {
     /**
@@ -34,7 +33,9 @@ class LightLanePresentation {
         this._glowFaces    = [];
         this._fragileShown = false;
         this._time         = 0;
-        this._rows         = [];      // pool slots: {row, codes: string[], tiles: Instance[], edge: Instance, whole: Instance, gaps, lit}
+        this._rows         = [];      // pool slots: {row, lit, parts: [{instance, code, litable, blink}]}
+        this._trackFree    = new Map();   // a track part's base code → free instances
+        this._lanesGaps    = LightLaneTuning.LANES_5.map(() => null);   // the gap codes of a row's lanes, reused
         this._ids          = new Map();   // object code → id
         this._views        = new Map();   // entity → {serial, code, instance, frame}
         this._free         = new Map();   // object code → free instances
@@ -76,15 +77,7 @@ class LightLanePresentation {
         this._runner.getInstance().setRenderLight(LightLaneTuning.LIGHT_COMPENSATION);
         this._glowFaces = this._runner.getInstance().getObject().faceList.filter((face) => face.glow);
         const slots   = (Math.ceil((LightLaneTuning.TRACK_BEHIND + LightLaneTuning.TRACK_AHEAD) / LightLaneTuning.TILE_LENGTH) + 1);
-        this._rows    = Array.from({length: slots}, () => ({
-            row:   null,
-            codes: LightLaneTuning.LANES_3.map(() => LightLaneModels.TILE),
-            lit:   null,
-            tiles: LightLaneTuning.LANES_3.map(() => LightLanePresentation.instance(this._id(LightLaneModels.TILE))),
-            edge:  LightLanePresentation.instance(this._id(LightLaneModels.TILE_EDGE)),
-            whole: LightLanePresentation.instance(this._id(LightLaneModels.ROW3)),
-            gaps:  false,
-        }));
+        this._rows    = Array.from({length: slots}, () => ({row: null, lit: null, parts: []}));
         this._fog     = LightLanePresentation.instance(this._id(LightLaneModels.FOG));
         this._effects.bind();
         this._buildDisplay();
@@ -132,9 +125,7 @@ class LightLanePresentation {
             this._release(view);
         }
         this._views.clear();
-        this._rows.forEach((slot) => {
-            slot.row = null;
-        });
+        this._rows.forEach((slot) => this._clearSlot(slot));
         this._hidden       = false;
         this._deathLight   = null;
         this._facing[2]    = 0;
@@ -247,7 +238,7 @@ class LightLanePresentation {
                     this._deathLight = {time: 0, duration: LightLaneTuning.DYING_TIME[event.value]};
                     if (event.value === LightLaneRunner.DEATH_SHOCK) {
                         this._hidden = true;
-                        this._effects.burst([runner.x, (runner.y + (LightLaneTuning.RUNNER_HEIGHT / 2)), this._simulation.getZ()], LightLaneTuning.SHARD_COUNT, LightLanePresentation.SHARD_PLAYER);
+                        this._effects.burst([runner.getX(), (runner.getY() + (LightLaneTuning.RUNNER_HEIGHT / 2)), this._simulation.getZ()], LightLaneTuning.SHARD_COUNT, LightLanePresentation.SHARD_PLAYER);
                         this._effects.shake(LightLaneTuning.DEATH_SHAKE);
                     } else if (event.value === LightLaneRunner.DEATH_FALL) {
                         this._camera.startFall();
@@ -285,7 +276,7 @@ class LightLanePresentation {
         if (runner.isSliding()) {
             this._playClip(LightLanePresentation.CLIP_SLIDE, fade, false, 1);
         } else if (runner.isJumping()) {
-            this._playClip(LightLanePresentation.CLIP_JUMP, fade, false, ((runner.boots) ? LightLaneTuning.JUMP_HIGH_PACE : 1));
+            this._playClip(LightLanePresentation.CLIP_JUMP, fade, false, ((runner.hasBoots()) ? LightLaneTuning.JUMP_HIGH_PACE : 1));
         } else if (this._time < this._stumbleUntil) {
             this._playClip(LightLanePresentation.CLIP_STUMBLE, fade, false, 1);
         } else {
@@ -338,8 +329,8 @@ class LightLanePresentation {
         engine.viewYaw   = ((LightLaneTuning.SKY_SPAN / 2) + (Math.atan(this._camera.getX() / LightLaneTuning.SKY_DISTANCE) * toDegrees));
         engine.viewRoll  = this._camera.getRoll();
         const runner = this._simulation.getRunner();
-        this._light.position[0] = runner.x;
-        this._light.position[1] = (runner.y + (runner.getHeight() / 2));
+        this._light.position[0] = runner.getX();
+        this._light.position[1] = (runner.getY() + (runner.getHeight() / 2));
         this._light.position[2] = this._simulation.getZ();
         this._applyLightLevel();
         engine.drawInit();
@@ -355,56 +346,123 @@ class LightLanePresentation {
         engine.drawFinish();
     }
 
-    // Each pool slot holds one row of tiles (row = floor(z / TILE_LENGTH)), placed when its row changes, holed under a
-    // gap; its top in cells under the runner's light.
+    // Each pool slot holds one row of tiles (row = floor(z / TILE_LENGTH)), laid out again when its row changes: a whole
+    // row in one tile when no lane has a gap, else a tile a lane (holed under a gap, the hole's walls beside); the right
+    // edge; in a warning zone the outer lanes' red edges (blinking) and its chevrons. Its tops in cells under the
+    // runner's light.
     _drawTrack() {
         const engine = this._engine;
-        const track  = this._simulation.getTrack();
         const z      = this._simulation.getZ();
         const length = LightLaneTuning.TILE_LENGTH;
         const first  = Math.floor((z - LightLaneTuning.TRACK_BEHIND) / length);
         const last   = Math.floor((z + LightLaneTuning.TRACK_AHEAD) / length);
-        const y      = -LightLaneTuning.TILE_THICKNESS;
-        const lanes  = LightLaneTuning.LANES_3;
+        const blink  = ((Math.floor(this._time * LightLaneTuning.WARN_BLINK_HZ * 2) % 2) === 0);
         for (let row = first; row <= last; row++) {
-            const slot   = this._rows[((row % this._rows.length) + this._rows.length) % this._rows.length];
-            const start  = (row * length);
-            const centre = (start + (length / 2));
+            const slot = this._rows[((row % this._rows.length) + this._rows.length) % this._rows.length];
             if (slot.row !== row) {
-                slot.row  = row;
-                const gaps = lanes.map((lane) => track.gapIn(lane, start));
-                const kind = (i) => (((i < 0) || (i >= lanes.length)) ? null : ((gaps[i] !== null) ? gaps[i] : LightLaneModels.TILE));
-                slot.gaps  = gaps.some((gap) => (gap !== null));
-                lanes.forEach((lane, i) => {
-                    // A holed tile has walls only where a neighbour's top flanks its hole.
-                    slot.codes[i] = ((gaps[i] !== null) ? LightLaneModels.gapTileVariant(gaps[i], kind(i - 1), kind(i + 1)) : LightLaneModels.TILE);
-                    slot.tiles[i].setObject(this._id(this._tileVariant(slot.codes[i], slot.lit)));
-                    slot.tiles[i].placeAt((lane * LightLaneTuning.LANE_WIDTH), y, centre);
-                });
-                const right = gaps[lanes.length - 1];
-                slot.edge.setObject(this._id((right !== null) ? LightLaneModels.tileEdgeCode(right) : LightLaneModels.TILE_EDGE));
-                slot.edge.placeAt((lanes[lanes.length - 1] * LightLaneTuning.LANE_WIDTH), y, centre);
-                slot.whole.setObject(this._id(this._tileVariant(LightLaneModels.ROW3, slot.lit)));
-                slot.whole.placeAt(0, y, centre);
+                this._layOutRow(slot, row);
             }
             // Under the runner's light (art § 2), by half tile (a mark every half tile shows it as a row): fine where the
             // light falls and the camera sees, one coarser half tile after, all the rest plain (user requests).
             const lit = LightLanePresentation._litLevel(row, z, this._lightRange);
             if (lit !== slot.lit) {
                 slot.lit = lit;
-                slot.tiles.forEach((tile, i) => tile.setObject(this._id(this._tileVariant(slot.codes[i], lit))));
-                slot.whole.setObject(this._id(this._tileVariant(LightLaneModels.ROW3, lit)));
+                for (const part of slot.parts) {
+                    if (part.litable) {
+                        part.instance.setObject(this._id(this._tileVariant(part.code, lit)));
+                    }
+                }
             }
-            // A row without a gap is one tile across its lanes (no separation between them); with a gap, a tile a lane.
-            if (!slot.gaps) {
-                engine.drawInstance(slot.whole);
-                continue;
+            for (const part of slot.parts) {
+                if (!part.blink || blink) {
+                    engine.drawInstance(part.instance);
+                }
             }
-            for (const tile of slot.tiles) {
-                engine.drawInstance(tile);
-            }
-            engine.drawInstance(slot.edge);
         }
+    }
+
+    _layOutRow(slot, row) {
+        const track  = this._simulation.getTrack();
+        const length = LightLaneTuning.TILE_LENGTH;
+        const start  = (row * length);
+        const centre = (start + (length / 2));
+        const width  = LightLaneTuning.LANE_WIDTH;
+        const y      = -LightLaneTuning.TILE_THICKNESS;
+        const lanes  = LightLaneTuning.LANES_5;
+        const gaps   = this._lanesGaps;
+        const outer  = LightLaneTrackGenerator.OUTER;
+        const five   = track.laneExistsAt(outer, start);
+        const opens  = (five && track.isOuterStart(start));
+        let holed    = false;
+        this._clearSlot(slot);
+        slot.row = row;
+        for (let i = 0; i < lanes.length; i++) {
+            gaps[i] = ((five || (Math.abs(lanes[i]) < outer)) ? track.gapIn(lanes[i], start) : null);
+            holed   = (holed || (gaps[i] !== null));
+        }
+        if (!holed && !opens) {
+            this._addPart(slot, ((five) ? LightLaneModels.ROW5 : LightLaneModels.ROW3), true, false, 0, y, centre);
+        } else {
+            for (let i = 0; i < lanes.length; i++) {
+                const lane = lanes[i];
+                if (!five && (Math.abs(lane) === outer)) {
+                    continue;
+                }
+                if (gaps[i] === null) {
+                    const front = (opens && (Math.abs(lane) === outer));
+                    this._addPart(slot, ((front) ? LightLaneModels.TILE_FRONT : LightLaneModels.TILE), true, false, (lane * width), y, centre);
+                    continue;
+                }
+                this._addPart(slot, LightLaneModels.gapTileCode(gaps[i]), true, false, (lane * width), y, centre);
+                // The neighbours' flanks seen through the hole, where a neighbour lane's top flanks it.
+                for (const side of LightLanePresentation.SIDES) {
+                    const neighbour = (i + side);
+                    const exists    = ((neighbour >= 0) && (neighbour < lanes.length) && (five || (Math.abs(lanes[neighbour]) < outer)));
+                    const kind      = ((!exists) ? null : ((gaps[neighbour] !== null) ? gaps[neighbour] : LightLaneModels.TILE));
+                    for (const wall of LightLaneModels.holeWalls(gaps[i], side, kind)) {
+                        this._addPart(slot, wall, false, false, ((lane * width) + (side * width / 2)), y, centre);
+                    }
+                }
+            }
+        }
+        const right = ((five) ? outer : LightLaneTrackGenerator.MIDDLE);
+        const edge  = gaps[lanes.indexOf(right)];
+        this._addPart(slot, ((edge !== null) ? LightLaneModels.tileEdgeCode(edge) : LightLaneModels.TILE_EDGE), false, false, (right * width), y, centre);
+        // The warning zone before the outer lanes end (generation § 3): their red edges blink, chevrons at its start.
+        for (const side of LightLanePresentation.SIDES) {
+            const lane = (side * outer);
+            if (track.isWarnTile(lane, start)) {
+                this._addPart(slot, LightLaneModels.WARN_EDGES, false, true, (lane * width), y, centre);
+            }
+            if (track.isWarnStart(start)) {
+                const arrow = ((side < 0) ? LightLaneModels.ARROW_SIDES[1][0] : LightLaneModels.ARROW_SIDES[0][0]);
+                this._addPart(slot, (LightLaneModels.ARROW + arrow), false, false, (lane * width), y, (start + LightLaneTuning.ARROW_SIZE[0]));
+            }
+        }
+        slot.lit = null;
+    }
+
+    // A track part of the slot: an instance of the object `code` (a tile's base code when litable: its variant under
+    // the light is set by _drawTrack), placed at (x, y, z).
+    _addPart(slot, code, litable, blink, x, y, z) {
+        const free     = this._trackFree.get(code);
+        const instance = (((free !== undefined) && (free.length > 0)) ? free.pop() : LightLanePresentation.instance(this._id(code)));
+        instance.setObject(this._id(code));
+        instance.placeAt(x, y, z);
+        slot.parts.push({instance: instance, code: code, litable: litable, blink: blink});
+    }
+
+    // The slot's parts back to their pools.
+    _clearSlot(slot) {
+        for (const part of slot.parts) {
+            if (!this._trackFree.has(part.code)) {
+                this._trackFree.set(part.code, []);
+            }
+            this._trackFree.get(part.code).push(part.instance);
+        }
+        slot.parts.length = 0;
+        slot.row          = null;
+        slot.lit          = null;
     }
 
     // The fog plane under the track, stepped by whole mirrored pairs of cells along the run: it stays put in the world.
@@ -426,28 +484,28 @@ class LightLanePresentation {
                 continue;
             }
             // A block shows its side crosses on the side the camera sees.
-            if (entity.kind === LightLaneEntity.BLOCK) {
-                code += ((this._camera.getX() < entity.x) ? LightLaneModels.BLOCK_SIDES[0][0] : LightLaneModels.BLOCK_SIDES[1][0]);
+            if (entity.getKind() === LightLaneEntity.BLOCK) {
+                code += ((this._camera.getX() < entity.getX()) ? LightLaneModels.BLOCK_SIDES[0][0] : LightLaneModels.BLOCK_SIDES[1][0]);
             }
-            const coin   = (entity.kind === LightLaneEntity.COIN);
-            const since  = (runTime - entity.takenAt);
-            if (coin && entity.taken && (since >= LightLaneTuning.COIN_TAKE_TIME)) {
+            const coin   = (entity.getKind() === LightLaneEntity.COIN);
+            const since  = (runTime - entity.getTakenAt());
+            if (coin && entity.isTaken() && (since >= LightLaneTuning.COIN_TAKE_TIME)) {
                 continue;
             }
             let view = this._views.get(entity);
-            if ((view !== undefined) && ((view.serial !== entity.serial) || (view.code !== code))) {
+            if ((view !== undefined) && ((view.serial !== entity.getSerial()) || (view.code !== code))) {
                 this._release(view);
                 view = undefined;
             }
             if (view === undefined) {
-                view = {serial: entity.serial, code: code, instance: this._acquire(code), frame: frame};
+                view = {serial: entity.getSerial(), code: code, instance: this._acquire(code), frame: frame};
                 this._views.set(entity, view);
             }
             view.frame = frame;
             if (coin) {
                 this._placeCoin(view.instance, entity, since);
             } else {
-                view.instance.placeAt(entity.x, 0, (entity.z + (entity.length / 2)));
+                view.instance.placeAt(entity.getX(), 0, (entity.getZ() + (entity.getLength() / 2)));
             }
             engine.drawInstance(view.instance);
         }
@@ -462,12 +520,12 @@ class LightLanePresentation {
 
     // A coin spins and bobs (art § 5.2); picked up, it rises and fades out (art § 7).
     _placeCoin(instance, entity, since) {
-        const phase = (entity.serial * LightLaneTuning.COIN_BOB_PHASE_STEP);
+        const phase = (entity.getSerial() * LightLaneTuning.COIN_BOB_PHASE_STEP);
         const bob   = (LightLaneTuning.COIN_BOB * Math.sin((2 * Math.PI * LightLaneTuning.COIN_BOB_HZ * this._time) + phase));
-        const taken = ((entity.taken) ? Math.min(1, (since / LightLaneTuning.COIN_TAKE_TIME)) : 0);
+        const taken = ((entity.isTaken()) ? Math.min(1, (since / LightLaneTuning.COIN_TAKE_TIME)) : 0);
         // Picked up, it goes on with the runner, just before it, rising and fading (art § 7).
-        const z     = ((entity.taken) ? (this._simulation.getZ() + Math.max(entity.takenDz, LightLaneTuning.COIN_TAKE_AHEAD)) : entity.z);
-        instance.placeAt(entity.x, ((entity.y - LightLaneTuning.SHAPES.COIN.halfHeight) + bob + (LightLaneTuning.COIN_TAKE_RISE * taken)), z);
+        const z     = ((entity.isTaken()) ? (this._simulation.getZ() + Math.max(entity.getTakenDz(), LightLaneTuning.COIN_TAKE_AHEAD)) : entity.getZ());
+        instance.placeAt(entity.getX(), ((entity.getY() - LightLaneTuning.SHAPES.COIN.halfHeight) + bob + (LightLaneTuning.COIN_TAKE_RISE * taken)), z);
         instance.setRotation([0, ((LightLaneTuning.COIN_SPIN * this._time) % LightLanePresentation.FULL_TURN), 0]);
         instance.setRenderLight(1 - taken);
     }
@@ -562,9 +620,7 @@ class LightLanePresentation {
             .addLight(this._light);
         this._hud = new LightLaneHud(this._engine, this._simulation).setBest(this._best).setOnPause(this._onPause).setShieldSource(this._shield);
         this._screen.bindHud(this._hud);
-        this._rows.forEach((slot) => {
-            slot.row = null;
-        });
+        this._rows.forEach((slot) => this._clearSlot(slot));
     }
 }
 
@@ -581,5 +637,7 @@ LightLanePresentation.CLIP_FALL       = 'fall';
 LightLanePresentation.SHARD_PLAYER    = 'Player';
 // Rotation about z that leans the runner towards a move to the right (Instance.setRotation's sign).
 LightLanePresentation.LEAN_SIGN       = -1;
+// The sides of a lane: left, right.
+LightLanePresentation.SIDES           = Object.freeze([-1, 1]);
 // The bloom works with the WebGL renderer only.
 LightLanePresentation.BLOOM_RENDERER  = 'webgl';

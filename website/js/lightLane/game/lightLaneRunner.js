@@ -14,9 +14,9 @@ class LightLaneRunner {
     }
 
     reset() {
-        this.lane        = 0;
-        this.x           = 0;
-        this.y           = 0;
+        this._lane       = 0;
+        this._x          = 0;
+        this._y          = 0;
         this._fromX      = 0;
         this._toX        = 0;
         this._laneTime   = -1;     // < 0: not changing lane
@@ -33,7 +33,7 @@ class LightLaneRunner {
         this._queuedAge  = 0;
         this._slowTime   = Infinity;
         this._fragile    = 0;
-        this.boots       = false;  // set by the bonus (step 12)
+        this._boots      = false;  // set by the bonus (step 12)
 
         return this;
     }
@@ -79,10 +79,10 @@ class LightLaneRunner {
             return true;
         }
         if (fromSide && (this._laneTime >= 0)) {
-            this._fromX    = this.x;
+            this._fromX    = this._x;
             this._toX      = (this._originLane * LightLaneTuning.LANE_WIDTH);
             this._laneSide = Math.sign(this._toX - this._fromX);
-            this.lane      = this._originLane;
+            this._lane     = this._originLane;
             this._laneTime = 0;
         }
         this._slowTime = 0;
@@ -93,7 +93,7 @@ class LightLaneRunner {
 
     // Back on its feet on the ground (a landing on a hurdle or a gate: it lands behind it).
     land() {
-        this.y         = 0;
+        this._y        = 0;
         this._jumping  = false;
         this._fastDrop = false;
     }
@@ -104,7 +104,7 @@ class LightLaneRunner {
      * @param {number} dy - m down
      */
     drop(dy) {
-        this.y -= dy;
+        this._y -= dy;
 
         return this;
     }
@@ -120,6 +120,33 @@ class LightLaneRunner {
         const ramp = ((this._slowTime - LightLaneTuning.STUMBLE_SLOW_TIME) / LightLaneTuning.STUMBLE_RAMP_TIME);
 
         return ((ramp < 1) ? (slow + ((1 - slow) * ramp)) : 1);
+    }
+
+    getLane() {
+        return this._lane;
+    }
+
+    // Centre across, m.
+    getX() {
+        return this._x;
+    }
+
+    // Feet, m.
+    getY() {
+        return this._y;
+    }
+
+    hasBoots() {
+        return this._boots;
+    }
+
+    /**
+     * @param {boolean} on - the jump boots (the bonus, plan step 12): the next jumps are higher
+     */
+    setBoots(on) {
+        this._boots = on;
+
+        return this;
     }
 
     isSliding() {
@@ -148,7 +175,7 @@ class LightLaneRunner {
 
     _receive(order, events) {
         if ((order === LightLaneCommandSampler.LEFT) || (order === LightLaneCommandSampler.RIGHT)) {
-            const target = (this.lane + ((order === LightLaneCommandSampler.LEFT) ? -1 : 1));
+            const target = (this._lane + ((order === LightLaneCommandSampler.LEFT) ? -1 : 1));
             if (!this._world.laneExists(target)) {
                 events.add(LightLaneEvents.REFUSE);
                 return;
@@ -167,7 +194,7 @@ class LightLaneRunner {
         switch (order) {
             case LightLaneCommandSampler.LEFT:
             case LightLaneCommandSampler.RIGHT:
-                return ((this._laneTime < 0) && this._world.laneExists(this.lane + ((order === LightLaneCommandSampler.LEFT) ? -1 : 1)));
+                return ((this._laneTime < 0) && this._world.laneExists(this._lane + ((order === LightLaneCommandSampler.LEFT) ? -1 : 1)));
             case LightLaneCommandSampler.JUMP:
                 return (!this._jumping && (!this._sliding || !this._world.standingCutsGate()));
             default:
@@ -180,10 +207,10 @@ class LightLaneRunner {
             case LightLaneCommandSampler.LEFT:
             case LightLaneCommandSampler.RIGHT: {
                 const side       = ((order === LightLaneCommandSampler.LEFT) ? -1 : 1);
-                this._originLane = this.lane;
-                this.lane       += side;
-                this._fromX      = this.x;
-                this._toX        = (this.lane * LightLaneTuning.LANE_WIDTH);
+                this._originLane = this._lane;
+                this._lane      += side;
+                this._fromX      = this._x;
+                this._toX        = (this._lane * LightLaneTuning.LANE_WIDTH);
                 this._laneTime   = 0;
                 this._laneSide   = side;
                 events.add(LightLaneEvents.LANE, side);
@@ -195,9 +222,9 @@ class LightLaneRunner {
                 this._jumping    = true;
                 this._fastDrop   = false;
                 this._jumpTime   = 0;
-                this._jumpHeight = ((this.boots) ? LightLaneTuning.JUMP_HEIGHT_BOOTS : LightLaneTuning.JUMP_HEIGHT);
-                this._jumpTotal  = ((this.boots) ? LightLaneTuning.JUMP_TIME_BOOTS : LightLaneTuning.JUMP_TIME);
-                events.add(LightLaneEvents.JUMP, ((this.boots) ? 1 : 0));
+                this._jumpHeight = ((this._boots) ? LightLaneTuning.JUMP_HEIGHT_BOOTS : LightLaneTuning.JUMP_HEIGHT);
+                this._jumpTotal  = ((this._boots) ? LightLaneTuning.JUMP_TIME_BOOTS : LightLaneTuning.JUMP_TIME);
+                events.add(LightLaneEvents.JUMP, ((this._boots) ? 1 : 0));
                 break;
             default:
                 if (this._jumping) {
@@ -220,9 +247,9 @@ class LightLaneRunner {
         }
         this._laneTime += dt;
         const s = Math.min(1, (this._laneTime / LightLaneTuning.LANE_CHANGE_TIME));
-        this.x  = (this._fromX + ((this._toX - this._fromX) * ((3 * s * s) - (2 * s * s * s))));
+        this._x = (this._fromX + ((this._toX - this._fromX) * ((3 * s * s) - (2 * s * s * s))));
         if (s >= 1) {
-            this.x         = this._toX;
+            this._x        = this._toX;
             this._laneTime = -1;
         }
     }
@@ -233,12 +260,12 @@ class LightLaneRunner {
         }
         this._jumpTime += dt;
         if (this._fastDrop) {
-            this.y -= (LightLaneTuning.FAST_DROP_SPEED * dt);
+            this._y -= (LightLaneTuning.FAST_DROP_SPEED * dt);
         } else {
             const t = Math.min(1, (this._jumpTime / this._jumpTotal));
-            this.y  = (4 * this._jumpHeight * t * (1 - t));
+            this._y = (4 * this._jumpHeight * t * (1 - t));
         }
-        if ((this.y <= 0) || (this._jumpTime >= this._jumpTotal)) {
+        if ((this._y <= 0) || (this._jumpTime >= this._jumpTotal)) {
             const dropped = this._fastDrop;
             this.land();
             events.add(LightLaneEvents.LAND);

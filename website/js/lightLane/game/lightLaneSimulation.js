@@ -1,7 +1,7 @@
 /**
  * The run, without the engine, the DOM or the loader (it runs in Node for the bench): fixed steps of 1/120 s fed by an
  * accumulator (gameplay § 1), the states of gameplay § 8.1 it owns (COUNTDOWN, RUNNING, DYING, GAME_OVER; the pause is
- * the game's), the tiers and the speed of the difficulty (§ 9.1), the runner (LightLaneRunner), the track
+ * the game's), the tier and the speed of the difficulty (§ 9.1, LightLaneDifficulty), the runner (LightLaneRunner), the track
  * (LightLaneTrackGenerator), the collisions in the order of § 5.1 (gaps, obstacles, pick-ups; one collision a step),
  * the score (LightLaneRunScore). The one-shot events go to getEvents(), read and emptied by the presentation. The
  * presentation reads the getters, never writes. No allocation per step once the pools are warm.
@@ -54,13 +54,13 @@ class LightLaneSimulation {
     newRun(options = {}) {
         const tier = (options.tier ?? 0);
 
-        this._z             = LightLaneSimulation.tierStart(tier);
+        this._z             = LightLaneDifficulty.tierStart(tier);
         this._runner.reset();
         this._savePrevious();
         this._runTime       = 0;
         this._distance      = 0;
         this._tier          = tier;
-        this._speed         = LightLaneSimulation.tierSpeed(tier);
+        this._speed         = LightLaneDifficulty.targetSpeed(this._z);
         this._rampFrom      = this._speed;
         this._rampTime      = LightLaneTuning.TIER_RAMP_SECONDS;
         this._accumulator   = 0;
@@ -144,11 +144,11 @@ class LightLaneSimulation {
     }
 
     getX() {
-        return this._runner.x;
+        return this._runner.getX();
     }
 
     getY() {
-        return this._runner.y;
+        return this._runner.getY();
     }
 
     getZ() {
@@ -210,37 +210,10 @@ class LightLaneSimulation {
 
     /**
      * @param {int} lane
-     * @returns {boolean} the lane exists at the runner's z (3 lanes until step 10 brings the sections)
+     * @returns {boolean} the lane exists at the runner's z (the section there, generation § 3)
      */
     laneExists(lane) {
-        return LightLaneTuning.LANES_3.includes(lane);
-    }
-
-    static tierStart(tier) {
-        const tiers = LightLaneTuning.TIERS;
-        if (tier < tiers.length) {
-            return tiers[tier].from;
-        }
-
-        return (tiers[tiers.length - 1].from + ((tier - (tiers.length - 1)) * LightLaneTuning.TIER_LATE_LENGTH));
-    }
-
-    static tierSpeed(tier) {
-        const tiers = LightLaneTuning.TIERS;
-        if (tier < tiers.length) {
-            return tiers[tier].speed;
-        }
-
-        return Math.min(LightLaneTuning.SPEED_MAX, (tiers[tiers.length - 1].speed + ((tier - (tiers.length - 1)) * LightLaneTuning.TIER_LATE_SPEED_STEP)));
-    }
-
-    static tierAt(distance) {
-        let tier = 0;
-        while ((tier < LightLaneTuning.TIER_LAST) && (distance >= LightLaneSimulation.tierStart(tier + 1))) {
-            tier++;
-        }
-
-        return tier;
+        return this._generator.laneExistsAt(lane, this._z);
     }
 
     _startCountdown(newRun) {
@@ -287,13 +260,23 @@ class LightLaneSimulation {
         this._checkCoins();
     }
 
+    // A gap, or the void past the track's edge (an outer lane that ended, generation § 3).
     _checkGaps() {
         const runner = this._runner;
+        const x      = runner.getX();
+        const y      = runner.getY();
         for (const entity of this._generator.getActive()) {
-            if ((entity.kind === LightLaneEntity.GAP) && LightLaneCollision.fallsInto(entity.box, runner.x, runner.y, this._z)) {
+            if ((entity.getKind() === LightLaneEntity.GAP) && LightLaneCollision.fallsInto(entity.getBox(), x, y, this._z)) {
                 this._kill(LightLaneRunner.DEATH_FALL);
                 return true;
             }
+        }
+        const outer = LightLaneTrackGenerator.OUTER;
+        const last  = ((this._generator.laneExistsAt(outer, this._z)) ? outer : LightLaneTrackGenerator.MIDDLE);
+        const edge  = ((last * LightLaneTuning.LANE_WIDTH) + (LightLaneTuning.LANE_WIDTH / 2));
+        if ((y <= LightLaneTuning.VOID_FEET) && (Math.abs(x) > edge)) {
+            this._kill(LightLaneRunner.DEATH_FALL);
+            return true;
         }
 
         return false;
@@ -301,27 +284,27 @@ class LightLaneSimulation {
 
     _checkObstacles() {
         const runner = this._runner;
-        const sweep  = LightLaneCollision.runnerBox(this._sweep, runner.x, runner.y, runner.getHeight(), this._previous.z, this._z);
+        const sweep  = LightLaneCollision.runnerBox(this._sweep, runner.getX(), runner.getY(), runner.getHeight(), this._previous.z, this._z);
         const before = LightLaneCollision.runnerBox(this._before, this._previous.x, this._previous.y, this._previous.height, this._previous.z, this._previous.z);
         for (const entity of this._generator.getActive()) {
-            if (entity.hit || (entity.kind === LightLaneEntity.COIN) || (entity.kind === LightLaneEntity.GAP) || !LightLaneCollision.overlaps(sweep, entity.box)) {
+            if (entity.isHit() || !entity.isObstacle() || (entity.getKind() === LightLaneEntity.GAP) || !LightLaneCollision.overlaps(sweep, entity.getBox())) {
                 continue;
             }
-            const entry   = LightLaneCollision.entry(before, entity.box);
-            const outcome = LightLaneCollision.outcome(entity.kind, entry);
+            const entry   = LightLaneCollision.entry(before, entity.getBox());
+            const outcome = LightLaneCollision.outcome(entity.getKind(), entry);
             // Already inside (the step before overlapped too): nothing new. A side entry is not marked: the element
             // stays solid, each new try from the side is a new stumble (the second while fragile kills).
             if (outcome === LightLaneCollision.IGNORE) {
                 continue;
             }
             if (outcome === LightLaneCollision.DEATH) {
-                entity.hit = true;
+                entity.markHit();
                 this._kill(LightLaneRunner.DEATH_SHOCK);
                 return true;
             }
             if (outcome === LightLaneCollision.STUMBLE_LAND) {
                 // Landed on it, on its feet behind it: done with this element.
-                entity.hit = true;
+                entity.markHit();
                 runner.land();
             }
             if (runner.stumble(entry === LightLaneCollision.SIDE)) {
@@ -338,12 +321,10 @@ class LightLaneSimulation {
 
     _checkCoins() {
         const runner = this._runner;
-        const reach  = LightLaneCollision.runnerBox(this._reach, runner.x, runner.y, runner.getHeight(), this._previous.z, this._z, LightLaneTuning.COIN_REACH);
+        const reach  = LightLaneCollision.runnerBox(this._reach, runner.getX(), runner.getY(), runner.getHeight(), this._previous.z, this._z, LightLaneTuning.COIN_REACH);
         for (const entity of this._generator.getActive()) {
-            if ((entity.kind === LightLaneEntity.COIN) && !entity.taken && LightLaneCollision.picks(reach, entity)) {
-                entity.taken   = true;
-                entity.takenAt = this._runTime;
-                entity.takenDz = (entity.z - this._z);
+            if ((entity.getKind() === LightLaneEntity.COIN) && !entity.isTaken() && LightLaneCollision.picks(reach, entity)) {
+                entity.take(this._runTime, (entity.getZ() - this._z));
                 this._score.addCoin(LightLaneTuning.COIN_POINTS, false);
                 this._events.add(LightLaneEvents.COIN, null, entity);
             }
@@ -353,9 +334,9 @@ class LightLaneSimulation {
     // The standing box at the runner's place cuts a gate (a slide goes on, a jump waits: gameplay § 3.5).
     _standingCutsGate() {
         const runner = this._runner;
-        const box    = LightLaneCollision.runnerBox(this._standing, runner.x, runner.y, LightLaneTuning.RUNNER_HEIGHT, this._z, this._z);
+        const box    = LightLaneCollision.runnerBox(this._standing, runner.getX(), runner.getY(), LightLaneTuning.RUNNER_HEIGHT, this._z, this._z);
         for (const entity of this._generator.getActive()) {
-            if ((entity.kind === LightLaneEntity.GATE) && LightLaneCollision.overlaps(box, entity.box)) {
+            if ((entity.getKind() === LightLaneEntity.GATE) && LightLaneCollision.overlaps(box, entity.getBox())) {
                 return true;
             }
         }
@@ -399,8 +380,8 @@ class LightLaneSimulation {
 
     _savePrevious() {
         const runner          = this._runner;
-        this._previous.x      = runner.x;
-        this._previous.y      = runner.y;
+        this._previous.x      = runner.getX();
+        this._previous.y      = runner.getY();
         this._previous.z      = this._z;
         this._previous.height = runner.getHeight();
     }
@@ -411,13 +392,19 @@ class LightLaneSimulation {
             this._speed = this._fixedSpeed;
             return;
         }
-        const tier = LightLaneSimulation.tierAt(this._z);
+        const tier = LightLaneDifficulty.tierAt(this._z);
         if (tier !== this._tier) {
             this._tier     = tier;
             this._rampFrom = this._speed;
             this._rampTime = 0;
         }
-        const target   = LightLaneSimulation.tierSpeed(this._tier);
+        // The start's rise sets the speed itself; no tier ramp is under way when it ends.
+        if (LightLaneDifficulty.isStarting(this._z)) {
+            this._speed    = LightLaneDifficulty.startSpeed(this._z);
+            this._rampTime = LightLaneTuning.TIER_RAMP_SECONDS;
+            return;
+        }
+        const target   = LightLaneDifficulty.tierSpeed(this._tier);
         this._rampTime = Math.min(LightLaneTuning.TIER_RAMP_SECONDS, (this._rampTime + dt));
         this._speed    = (this._rampFrom + ((target - this._rampFrom) * (this._rampTime / LightLaneTuning.TIER_RAMP_SECONDS)));
     }

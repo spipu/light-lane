@@ -31,9 +31,9 @@ function run() {
     r.step(step, [Sampler.LEFT], events);
     r.step(step, [Sampler.LEFT], events);
     steps(Tuning.LANE_CHANGE_TIME - (2 * step), r);
-    const firstLane = r.lane;
+    const firstLane = r.getLane();
     steps(Tuning.LANE_CHANGE_TIME + 0.05, r);
-    c.check('lane order during a change: run after it', ((firstLane === -1) && (r.lane === -2)), 'lanes ' + firstLane + ', ' + r.lane);
+    c.check('lane order during a change: run after it', ((firstLane === -1) && (r.getLane() === -2)), 'lanes ' + firstLane + ', ' + r.getLane());
 
     // The latest replaces the older one (5 lanes: neither order is refused).
     r = new Runner(wide);
@@ -41,7 +41,7 @@ function run() {
     r.step(step, [Sampler.RIGHT], events);
     r.step(step, [Sampler.LEFT], events);
     steps(Tuning.LANE_CHANGE_TIME * 2 + 0.05, r);
-    c.check('latest order replaces the older', (r.lane === -2), 'lane ' + r.lane);
+    c.check('latest order replaces the older', (r.getLane() === -2), 'lane ' + r.getLane());
 
     // A jump asked in the air shortly before landing: it runs on landing.
     r = new Runner(world);
@@ -63,9 +63,9 @@ function run() {
     r = new Runner(world);
     r.step(step, [Sampler.JUMP], events);
     steps(0.2, r);
-    const y = r.y;
+    const y = r.getY();
     r.step(step, [Sampler.SLIDE], events);
-    c.check('slide in the air: fast drop at once', (r.y < y));
+    c.check('slide in the air: fast drop at once', (r.getY() < y));
 
     return c.failures;
 }

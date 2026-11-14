@@ -14,12 +14,25 @@ class LightLaneModels {
         LightLaneModels.CODES.length = 0;
         LightLaneModels._lod = lod;
         const color = LightLaneTuning.COLOR;
-        // The track's tiles: one size of lines at any distance (user request).
-        LightLaneModels._load(LightLaneModels.TILE, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, null));
-        LightLaneModels._load(LightLaneModels.ROW3, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, null, LightLaneTuning.LANES_3.length));
+        // The track's tiles (plain, holed, whole rows), each plain and in the levels of detail under the runner's light
+        // (by half tile, a mark every half tile shows it as a row; holed tiles too, a gap is often met right under the
+        // light); one size of lines at any distance (user request). A hole's side walls, the right edge, the warning
+        // zone's red edges and chevrons are instances of their own beside the tiles.
+        for (const [suffix, cells] of [['', null], ...Object.entries(LightLaneModels.LIT_LEVELS)]) {
+            for (const [code, build] of LightLaneModels._tileBuilders()) {
+                LightLaneModels._load(code + suffix, build(cells));
+            }
+        }
         LightLaneModels._load(LightLaneModels.TILE_EDGE, LightLaneModels._tileEdge(LightLaneTuning.LINE_SIZE_DECOR, null));
         for (const code of LightLaneModels.GAPS) {
             LightLaneModels._load(LightLaneModels.tileEdgeCode(code), LightLaneModels._tileEdge(LightLaneTuning.LINE_SIZE_DECOR, code));
+        }
+        for (const [code, side, z0, z1] of LightLaneModels._wallSpans()) {
+            LightLaneModels._load(code, LightLaneModels._holeWall(side, z0, z1));
+        }
+        LightLaneModels._load(LightLaneModels.WARN_EDGES, LightLaneModels._warnEdges());
+        for (const [suffix, side] of LightLaneModels.ARROW_SIDES) {
+            LightLaneModels._load(LightLaneModels.ARROW + suffix, LightLaneModels._arrow(side));
         }
         // The obstacles: one size of lines at any distance (user request: no sudden change as they come near; the
         // bloom's halo keeps them visible far away).
@@ -35,14 +48,6 @@ class LightLaneModels {
         LightLaneModels._load(LightLaneModels.COIN, LightLaneModels._coin());
         for (const [name, rgb] of Object.entries(LightLaneModels.SHARD_COLORS)) {
             LightLaneModels._load(LightLaneModels.SHARD + name, LightLaneModels._shard(color[rgb]));
-        }
-        LightLaneModels._loadGapTiles('', null);
-        // Under the runner's light, by half tile (a mark every half tile shows it as a row): the half the runner is on
-        // in fine cells, the next half in coarser cells; holed tiles too (a gap is often met right under the light).
-        for (const [suffix, cells] of Object.entries(LightLaneModels.LIT_LEVELS)) {
-            LightLaneModels._load(LightLaneModels.TILE + suffix, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, cells));
-            LightLaneModels._load(LightLaneModels.ROW3 + suffix, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, cells, LightLaneTuning.LANES_3.length));
-            LightLaneModels._loadGapTiles(suffix, cells);
         }
         LightLaneModels._load(LightLaneModels.FOG, LightLaneModels._fog());
         LightLaneModels._skyId = loader.textures().load(LightLaneModels.ASSETS + LightLaneTuning.SKY_URL);
@@ -96,42 +101,55 @@ class LightLaneModels {
         return (LightLaneModels.TILE_EDGE + code.slice(1));
     }
 
-    /**
-     * The holed tile of a gap with the side walls its neighbours need: a wall along the part of the hole a neighbour
-     * covers (a plain tile: all of it; a holed tile: what its own hole leaves), none at the track's edge.
-     *
-     * @param {string}      code  - X3, X5
-     * @param {string|null} left  - the left lane's code (TILE or a gap's), null at the track's edge
-     * @param {string|null} right - the right lane's code, likewise
-     * @returns {string} the code of its object
-     */
-    static gapTileVariant(code, left, right) {
-        return (LightLaneModels.gapTileCode(code) + '-' + LightLaneModels._wallKey(code, left) + LightLaneModels._wallKey(code, right));
+    // The tiles each level of detail is built for: [code, build(cells)].
+    static _tileBuilders() {
+        const line = LightLaneTuning.LINE_SIZE_DECOR;
+        const list = [
+            [LightLaneModels.TILE, (cells) => LightLaneModels._tile(line, cells)],
+            [LightLaneModels.TILE_FRONT, (cells) => LightLaneModels._tile(line, cells, 1, true)],
+            [LightLaneModels.ROW3, (cells) => LightLaneModels._tile(line, cells, LightLaneTuning.LANES_3.length)],
+            [LightLaneModels.ROW5, (cells) => LightLaneModels._tile(line, cells, LightLaneTuning.LANES_5.length)],
+        ];
+        for (const code of LightLaneModels.GAPS) {
+            list.push([LightLaneModels.gapTileCode(code), (cells) => LightLaneModels._gapTile(LightLaneTuning.OBSTACLES[code], line, LightLaneTuning.LINE_SIZE, cells)]);
+        }
+
+        return list;
     }
 
-    // Each gap's tile in every pair of walls (left, right) its neighbours can ask for.
-    static _loadGapTiles(suffix, cells) {
-        const neighbours = [null, LightLaneModels.TILE, ...LightLaneModels.GAPS];
+    /**
+     * The side walls a holed tile needs where a neighbour lane's top flanks its hole: a plain tile beside it, all of
+     * the hole; a holed tile, what its own hole leaves; none at the track's edge.
+     *
+     * @param {string}      code      - X3, X5
+     * @param {int}         side      - −1 left, +1 right
+     * @param {string|null} neighbour - the side lane's code (TILE or a gap's), null where no lane is
+     * @returns {string[]} the codes of the wall objects, each placed at the lane's side (x ± LANE_WIDTH / 2)
+     */
+    static holeWalls(code, side, neighbour) {
+        const suffix = ((side < 0) ? LightLaneModels.WALL_SIDES[0][0] : LightLaneModels.WALL_SIDES[1][0]);
+
+        return LightLaneModels._walls(code, neighbour).map(([z0, z1]) => LightLaneModels._wallCode(suffix, z0, z1));
+    }
+
+    static _wallCode(suffix, z0, z1) {
+        return (LightLaneModels.HOLE_WALL + suffix + z0.toFixed(1) + '_' + z1.toFixed(1));
+    }
+
+    // Every wall span a hole can need, on both sides: [code, side, z0, z1].
+    static _wallSpans() {
+        const spans = new Map();
         for (const code of LightLaneModels.GAPS) {
-            const spec  = LightLaneTuning.OBSTACLES[code];
-            const sides = new Map(neighbours.map((n) => [LightLaneModels._wallKey(code, n), LightLaneModels._walls(code, n)]));
-            for (const [leftKey, left] of sides) {
-                for (const [rightKey, right] of sides) {
-                    const name = (LightLaneModels.gapTileCode(code) + '-' + leftKey + rightKey + suffix);
-                    LightLaneModels._load(name, LightLaneModels._gapTile(spec, LightLaneTuning.LINE_SIZE_DECOR, LightLaneTuning.LINE_SIZE, cells, left, right));
+            for (const neighbour of [LightLaneModels.TILE, ...LightLaneModels.GAPS]) {
+                for (const [z0, z1] of LightLaneModels._walls(code, neighbour)) {
+                    for (const [suffix, side] of LightLaneModels.WALL_SIDES) {
+                        spans.set(LightLaneModels._wallCode(suffix, z0, z1), [side, z0, z1]);
+                    }
                 }
             }
         }
-    }
 
-    // A side's walls named by what they cover: N none, T the whole hole, else the neighbour gap's code.
-    static _wallKey(code, neighbour) {
-        const walls = LightLaneModels._walls(code, neighbour);
-        if (walls.length === 0) {
-            return 'N';
-        }
-
-        return ((neighbour === LightLaneModels.TILE) ? 'T' : neighbour);
+        return [...spans].map(([code, [side, z0, z1]]) => [code, side, z0, z1]);
     }
 
     /**
@@ -166,13 +184,13 @@ class LightLaneModels {
      * @returns {string|null} the code of its object, null for a gap (drawn as its holed tile)
      */
     static obstacleCode(entity) {
-        switch (entity.kind) {
+        switch (entity.getKind()) {
             case LightLaneEntity.HURDLE:
                 return LightLaneModels.HURDLE;
             case LightLaneEntity.GATE:
                 return LightLaneModels.GATE;
             case LightLaneEntity.BLOCK:
-                return LightLaneModels.blockCode(entity.code);
+                return LightLaneModels.blockCode(entity.getCode());
             case LightLaneEntity.COIN:
                 return LightLaneModels.COIN;
             default:
@@ -188,15 +206,16 @@ class LightLaneModels {
         return loader.objects().getByCode(code).getId();
     }
 
-    // A lane's tile: a slab, its top at the origin's height + TILE_THICKNESS, a line along its top left edge, cross
-    // lines every TILE_MARK_STEP from its start (they show the speed).
-    static _tile(lineSize, cells, lanes = 1) {
+    // A lane's tile (or a whole row's, `lanes` wide): a slab, its top at the origin's height + TILE_THICKNESS, a line
+    // along its top left edge, cross lines every TILE_MARK_STEP from its start (they show the speed); `front`: its front
+    // face shows (an outer lane that starts, 3 → 5 lanes).
+    static _tile(lineSize, cells, lanes = 1, front = false) {
         const color = LightLaneTuning.COLOR;
         const w     = ((lanes * LightLaneTuning.LANE_WIDTH) / 2);
         const l     = (LightLaneTuning.TILE_LENGTH / 2);
         const h     = LightLaneTuning.TILE_THICKNESS;
         const b     = new LightLaneObjectBuilder();
-        LightLaneModels._slab(b, -l, l, cells, false, w);
+        LightLaneModels._slab(b, -l, l, cells, front, w);
         // The left line of each lane; a whole row has the right edge's too.
         for (let k = 0; k < lanes; k++) {
             const x = (-w + (k * LightLaneTuning.LANE_WIDTH));
@@ -395,8 +414,8 @@ class LightLaneModels {
     }
 
     // A tile with the hole of a gap (art § 5.2): the slab before and after it, the left line on both, LETHAL lines
-    // across its front and back edges.
-    static _gapTile(spec, decorSize, lineSize, cells, leftWalls = [], rightWalls = []) {
+    // across its front and back edges. Its side walls are objects of their own (holeWalls).
+    static _gapTile(spec, decorSize, lineSize, cells) {
         const color = LightLaneTuning.COLOR;
         const w     = (LightLaneTuning.LANE_WIDTH / 2);
         const l     = (LightLaneTuning.TILE_LENGTH / 2);
@@ -412,15 +431,46 @@ class LightLaneModels {
         }
         b.line([-w, h, from], [w, h, from], lineSize, color.LETHAL, [0, 1, 1], true);
         b.line([-w, h, to], [w, h, to], lineSize, color.LETHAL, [0, 1, -1], true);
-        // The flanks of the neighbour lanes seen through the hole (user request), facing it; none at the track's edge.
-        for (const [side, walls] of [[-1, leftWalls], [1, rightWalls]]) {
-            const x = (side * w);
-            for (const [z0, z1] of walls) {
-                b.facing([[x, 0, z0], [x, h, z0], [x, h, z1], [x, 0, z1]], [(x + side), (h / 2), ((z0 + z1) / 2)], LightLaneModels._glass(color.BODY_SIDE));
-                // Its edge in neon too, as the hole's front and back (user request); centred on the lane line, which it
-                // covers (thicker).
-                b.line([x, h, z0], [x, h, z1], lineSize, color.LETHAL, [0, 1, 0], true);
-            }
+
+        return b.data();
+    }
+
+    // The flank of a neighbour lane seen through a hole (user request), over [z0, z1] of the tile's frame, at x = 0 (placed
+    // on the lane's side), facing the hole (side −1: the hole's left wall, facing +x); its edge in neon too, as the
+    // hole's front and back (user request), centred on the lane line, which it covers (thicker).
+    static _holeWall(side, z0, z1) {
+        const color = LightLaneTuning.COLOR;
+        const h     = LightLaneTuning.TILE_THICKNESS;
+        const b     = new LightLaneObjectBuilder();
+        b.facing([[0, 0, z0], [0, h, z0], [0, h, z1], [0, 0, z1]], [side, (h / 2), ((z0 + z1) / 2)], LightLaneModels._glass(color.BODY_SIDE));
+        b.line([0, h, z0], [0, h, z1], LightLaneTuning.LINE_SIZE, color.LETHAL, [0, 1, 0], true);
+
+        return b.data();
+    }
+
+    // The warning zone's red edges of an outer lane (generation § 3, art tileWarn): LETHAL lines along both sides of a
+    // tile, over its own lines (thicker); blinking, drawn every other half period.
+    static _warnEdges() {
+        const w = (LightLaneTuning.LANE_WIDTH / 2);
+        const l = (LightLaneTuning.TILE_LENGTH / 2);
+        const h = LightLaneTuning.TILE_THICKNESS;
+        const b = new LightLaneObjectBuilder();
+        for (const side of [-1, 1]) {
+            b.line([side * w, h, -l], [side * w, h, l], LightLaneTuning.LINE_SIZE, LightLaneTuning.COLOR.LETHAL, [side, 1, 0], true);
+        }
+
+        return b.data();
+    }
+
+    // An amber chevron on the floor (art § 5.2 arrow, ARROW_SIZE [across, along]), its tip towards side (−1 left, +1
+    // right): the way back to the middle lanes at the start of a warning zone.
+    static _arrow(side) {
+        const [across, along] = LightLaneTuning.ARROW_SIZE;
+        const y    = (LightLaneTuning.TILE_THICKNESS + LightLaneTuning.FLOOR_LIFT);
+        const tip  = [(side * across / 2), y, 0];
+        const b    = new LightLaneObjectBuilder();
+        for (const end of [-1, 1]) {
+            b.bar([(-side * across / 2), y, (end * along / 2)], tip, LightLaneTuning.LINE_SIZE, LightLaneTuning.COLOR.WARN, [0, 1, 0]);
         }
 
         return b.data();
@@ -527,6 +577,16 @@ LightLaneModels.LIT_LEVELS = Object.freeze({
     PF: Object.freeze([null, LightLaneTuning.TILE_TOP_CELL]),
 });
 LightLaneModels.TILE       = 'tile';
+// An outer lane's first tile, its front face shown (3 → 5 lanes).
+LightLaneModels.TILE_FRONT = 'tileFront';
+LightLaneModels.ROW5       = 'row5';
+LightLaneModels.HOLE_WALL  = 'holeWall';
+// A hole's wall variants by the side of the hole it stands on: [suffix, side].
+LightLaneModels.WALL_SIDES = Object.freeze([['L', -1], ['R', 1]]);
+LightLaneModels.WARN_EDGES = 'warnEdges';
+LightLaneModels.ARROW      = 'arrow';
+// The chevrons by the way they point: [suffix, side].
+LightLaneModels.ARROW_SIDES = Object.freeze([['L', -1], ['R', 1]]);
 // Lengths closer than this are equal (m): a hole's side wall shorter is not built, a floor mark is found at its z.
 LightLaneModels.EPSILON    = 0.01;
 LightLaneModels.TILE_EDGE  = 'tileEdge';

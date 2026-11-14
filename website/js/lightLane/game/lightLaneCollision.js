@@ -99,7 +99,11 @@ class LightLaneCollision {
      * @returns {boolean} the coin's centre is inside
      */
     static picks(box, coin) {
-        return ((coin.x >= box.x0) && (coin.x <= box.x1) && (coin.y >= box.y0) && (coin.y <= box.y1) && (coin.z >= box.z0) && (coin.z <= box.z1));
+        const x = coin.getX();
+        const y = coin.getY();
+        const z = coin.getZ();
+
+        return ((x >= box.x0) && (x <= box.x1) && (y >= box.y0) && (y <= box.y1) && (z >= box.z0) && (z <= box.z1));
     }
 }
 

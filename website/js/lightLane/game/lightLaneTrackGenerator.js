@@ -1,41 +1,84 @@
 /**
- * The track as a stream (generation § 1): rows are generated until zGenerated ≥ zRunner + GENERATE_AHEAD, what passed
- * behind zRunner − RETIRE_BEHIND goes back to the pool. Data only (LightLaneEntity), no engine instance.
+ * The track as a stream (generation § 1): sections, rows and events are generated until zGenerated ≥ zRunner +
+ * GENERATE_AHEAD; what passed behind zRunner − RETIRE_BEHIND goes back to the pool. Data only (LightLaneEntity), no
+ * engine instance; no allocation per row once the pools are warm.
  *
- * Rows (generation § 4.1): the first at FIRST_ROW from the start, then the tier's gap plus a jitter, times its target
- * speed, on the 0.5 m grid; a long element pushes the next row back; a gap starts at its tile's start + holeFrom
- * (§ 4.6); the centre element of a corridor is centred along its blocks. The pattern of a row: the test mode's next
- * one when it imposes the track (then empty rows), otherwise a weighted draw among the patterns of the tier, not
- * repeating the last ones (§ 4.5, steps 1 to 4). Coins (§ 9): the pattern's own (arc over the hurdle, rest line,
- * corridor centre), else a line with COIN_LINE_CHANCE on the free lane nearest the centre.
+ * - Sections (§ 3): 3 or 5 lanes, on whole tiles; the first of 5 lanes forced into tier 2; before the outer lanes end,
+ *   the warning zone (nothing on them, tier 0 patterns in the middle, its end with the lanes −1 and +1 free).
+ * - Rows (§ 4): the tier's gap plus a jitter, times the target speed (LightLaneDifficulty); a weighted draw among the
+ *   placements (pattern, mirror, offset) the tier's catalogue allows, without the last ones, with the new tier's
+ *   introduction factor; each draw passes the fairness check (LightLaneOccupancy, § 8) or is drawn again, ROW_TRIES
+ *   times at most, then the row is left empty. A gap starts at its tile's start + holeFrom (§ 4.6).
+ * - First encounters (§ 6), bonuses (§ 7.1, flight excluded until plan step 12), scenery zones (§ 7.3).
+ * - Coins (§ 9): the pattern's own, else a line with COIN_LINE_CHANCE on the clear lane most starts reach.
  *
- * Plan step 8: 3 lanes, no enemy, no fairness check; step 10 brings the sections, the 5 lanes and the check.
+ * The test mode's imposed rows come in order without the draw nor the check, then empty rows; lockTier (bench only)
+ * fixes the tier, its speed and its catalogue and cuts the first encounters (§ 8.3). Enemies come with plan step 11.
  */
 class LightLaneTrackGenerator {
     constructor() {
-        this._random     = new LightLaneRandom(0);
-        this._active     = [];      // the entities on the track, in generation order
-        this._pool       = [];
-        this._nextRowZ   = 0;
-        this._recent     = [];      // Ids of the last rows
-        this._imposed    = null;    // the test mode's rows still to come, or null
-        this._candidates = [];
-        this._serial     = 0;
+        this._random      = new LightLaneRandom(0);
+        this._zoneRandom  = new LightLaneRandom(0);   // the scenery zones, drawn when the presentation asks
+        this._occupancy   = new LightLaneOccupancy();
+        this._active      = [];      // the entities on the track, in generation order
+        this._pool        = [];
+        this._serial      = 0;
+        this._start       = 0;
+        this._locked      = null;    // the bench's locked tier, or null
+        this._imposed     = null;    // the test mode's rows still to come, or null
+        this._sections    = [];      // {from, to, lanes, first, warnFrom, clearFrom}, in order
+        this._spareSections = [];
+        this._fiveForced  = null;    // z of the forced first section of 5 lanes still to come, or null
+        this._nextRowZ    = 0;
+        this._lastRowZ    = 0;       // front of the last row (the fairness window starts there)
+        this._recent      = [];      // Ids of the last rows
+        this._encounters  = [];      // the first encounters still to come: {z, pattern, bonus}, in order
+        this._nextBonusZ  = Infinity;
+        this._lastBonus   = null;
+        this._zones       = [];      // scenery zone of each ZONE_LENGTH from the start
+        // The draw's placements, reused: {pattern, mirror, offset, z, weight}.
+        this._placements  = Array.from({length: LightLaneTrackGenerator.PLACEMENTS_MAX}, () => ({pattern: null, mirror: false, offset: 0, z: 0, weight: 0}));
+        this._placementCount = 0;
+        this._row         = {pattern: null, lanes: null, offset: 0, z: 0};    // the row being laid
+        this._lanesFree   = [];      // lanes, reused by the coins and the bonus
     }
 
     /**
-     * @param {int}         seed
-     * @param {number}      start   - z of the start
+     * @param {int}           seed
+     * @param {number}        start   - z of the start
      * @param {object[]|null} imposed - the test mode's rows ({id, mirror, offset}), null to draw them
+     * @returns {LightLaneTrackGenerator} this
      */
     reset(seed, start, imposed) {
-        this._random = new LightLaneRandom(seed);
+        this._random     = new LightLaneRandom(seed);
+        this._zoneRandom = new LightLaneRandom(seed ^ LightLaneTrackGenerator.ZONE_SEED);
         while (this._active.length > 0) {
             this._pool.push(this._active.pop().reset());
         }
+        while (this._sections.length > 0) {
+            this._spareSections.push(this._sections.pop());
+        }
+        this._start         = start;
         this._nextRowZ      = (start + LightLaneTuning.FIRST_ROW);
+        this._lastRowZ      = start;
         this._recent.length = 0;
         this._imposed       = ((imposed !== null) ? imposed.slice() : null);
+        this._zones.length  = 0;
+        this._lastBonus     = null;
+        this._planEvents();
+
+        return this;
+    }
+
+    /**
+     * Bench only (generation § 8.3): the tier, its speed and its catalogue fixed; sections drawn by its rules; no first
+     * encounter.
+     *
+     * @param {int|null} tier
+     * @returns {LightLaneTrackGenerator} this, to be reset() after
+     */
+    lockTier(tier) {
+        this._locked = tier;
 
         return this;
     }
@@ -47,7 +90,7 @@ class LightLaneTrackGenerator {
      */
     update(z) {
         while (this._nextRowZ < (z + LightLaneTuning.GENERATE_AHEAD)) {
-            this._row(this._nextRowZ);
+            this._layRow(this._nextRowZ);
         }
         const behind = (z - LightLaneTuning.RETIRE_BEHIND);
         let kept = 0;
@@ -60,6 +103,10 @@ class LightLaneTrackGenerator {
             this._active[kept++] = entity;
         }
         this._active.length = kept;
+        // Sections far behind (the tiles drawn behind the runner still read theirs).
+        while ((this._sections.length > 1) && (this._sections[0].to < (behind - LightLaneTuning.TILE_LENGTH))) {
+            this._spareSections.push(this._sections.shift());
+        }
     }
 
     /**
@@ -71,134 +118,681 @@ class LightLaneTrackGenerator {
 
     /**
      * @param {int}    lane
-     * @param {number} tileStart - z of a tile's start
-     * @returns {string|null} the gap code (X3, X5) whose hole lies in that tile of that lane, or null
+     * @param {number} z
+     * @returns {boolean} the lane has a tile at z (the middle lanes always; the outer ones in a section of 5)
      */
-    gapIn(lane, tileStart) {
-        for (const entity of this._active) {
-            if ((entity.kind === LightLaneEntity.GAP) && (entity.lane === lane) && (entity.z >= tileStart) && (entity.z < (tileStart + LightLaneTuning.TILE_LENGTH))) {
-                return entity.code;
+    laneExistsAt(lane, z) {
+        if (Math.abs(lane) <= LightLaneTrackGenerator.MIDDLE) {
+            return true;
+        }
+        if (Math.abs(lane) > LightLaneTrackGenerator.OUTER) {
+            return false;
+        }
+        const section = this.sectionAt(z);
+
+        return ((section !== null) && (section.lanes === LightLaneTuning.LANES_5.length));
+    }
+
+    /**
+     * @param {number} z
+     * @returns {{from: number, to: number, lanes: int, first: boolean, warnFrom: number, clearFrom: number}|null} the
+     *          section holding z (read only), null outside the planned ones
+     */
+    sectionAt(z) {
+        for (const section of this._sections) {
+            if ((z >= section.from) && (z < section.to)) {
+                return section;
             }
         }
 
         return null;
     }
 
-    _row(rowZ) {
-        const tier    = LightLaneSimulation.tierAt(rowZ);
-        const speed   = LightLaneSimulation.tierSpeed(tier);
-        const pattern = this._pickPattern(tier);
-        let z         = rowZ;
-        let lanes     = null;
-        let longest   = 0;
-        if (pattern !== null) {
-            lanes   = ((pattern.mirror) ? LightLanePatterns.mirror(pattern.pattern.lanes) : pattern.pattern.lanes);
-            z       = LightLaneTrackGenerator._gapAligned(z, lanes, pattern.pattern.corridor);
-            longest = Math.max(...lanes.map((code) => ((code === '.') ? 0 : LightLaneTuning.OBSTACLES[code].length)));
+    /**
+     * @param {int}    lane
+     * @param {number} tileStart - z of a tile's start
+     * @returns {boolean} an outer lane's tile in the warning zone before it ends (its edges blink red)
+     */
+    isWarnTile(lane, tileStart) {
+        if (Math.abs(lane) !== LightLaneTrackGenerator.OUTER) {
+            return false;
         }
-        const rowGap = LightLaneTuning.ROW_GAPS[Math.min(tier, (LightLaneTuning.ROW_GAPS.length - 1))];
-        let gap      = LightLaneTrackGenerator._snap((rowGap + this._random.between(0, LightLaneTuning.ROW_GAP_JITTER)) * speed);
-        if (longest > (gap - (LightLaneTuning.LONG_ELEMENT_MARGIN * speed))) {
-            gap = LightLaneTrackGenerator._snap(longest + (LightLaneTuning.LONG_ELEMENT_MARGIN * speed));
-        }
-        this._nextRowZ = (z + gap);
-        if (pattern === null) {
-            return;
-        }
-        const blockLength = ((pattern.pattern.corridor) ? LightLaneTuning.OBSTACLES[lanes[0]].length : 0);
-        lanes.forEach((code, i) => {
-            if (code === '.') {
-                return;
-            }
-            const lane   = (LightLaneTuning.LANES_3[i] + pattern.offset);
-            const centre = ((pattern.pattern.corridor) && (i === 1));
-            const front  = ((centre) ? (z + LightLaneTrackGenerator._snap((blockLength - LightLaneTuning.OBSTACLES[code].length) / 2)) : z);
-            this._take().setObstacle(code, lane, front);
-        });
-        this._coins(pattern, lanes, z, speed, (z + gap));
+        const section = this.sectionAt(tileStart);
+
+        return ((section !== null) && (section.lanes === LightLaneTuning.LANES_5.length) && (tileStart >= section.warnFrom));
     }
 
-    // The test mode's next row (then none), or a weighted draw: {pattern, mirror, offset} or null for an empty row.
-    _pickPattern(tier) {
-        if (this._imposed !== null) {
-            const row = this._imposed.shift();
-            if (row === undefined) {
-                return null;
+    /**
+     * @param {number} tileStart
+     * @returns {boolean} the warning zone starts with this tile (the amber chevrons on the outer lanes)
+     */
+    isWarnStart(tileStart) {
+        const section = this.sectionAt(tileStart);
+
+        return ((section !== null) && (section.lanes === LightLaneTuning.LANES_5.length) && (Math.abs(tileStart - section.warnFrom) < LightLaneTrackGenerator.EPSILON));
+    }
+
+    /**
+     * @param {number} tileStart
+     * @returns {boolean} the outer lanes start with this tile (their front face shows)
+     */
+    isOuterStart(tileStart) {
+        const section = this.sectionAt(tileStart);
+
+        return ((section !== null) && (section.lanes === LightLaneTuning.LANES_5.length) && (Math.abs(tileStart - section.from) < LightLaneTrackGenerator.EPSILON));
+    }
+
+    /**
+     * @param {int}    lane
+     * @param {number} tileStart - z of a tile's start
+     * @returns {string|null} the gap code (X3, X5) whose hole lies in that tile of that lane, or null
+     */
+    gapIn(lane, tileStart) {
+        for (const entity of this._active) {
+            const z = entity.getZ();
+            if ((entity.getKind() === LightLaneEntity.GAP) && (entity.getLane() === lane) && (z >= tileStart) && (z < (tileStart + LightLaneTuning.TILE_LENGTH))) {
+                return entity.getCode();
             }
-            const pattern = LightLanePatterns.get(row.id);
-            if (pattern === undefined) {
-                throw new Error('LightLaneTrackGenerator - unknown pattern ' + row.id);
-            }
-            return {pattern: pattern, mirror: row.mirror, offset: row.offset};
         }
-        const candidates = this._candidates;
-        candidates.length = 0;
-        for (const pattern of LightLanePatterns.TABLE) {
-            if ((pattern.tier <= tier) && (pattern.lanes.length === 3) && !pattern.lanes.some((code) => LightLanePatterns.ENEMIES.includes(code))) {
-                candidates.push(pattern);
+
+        return null;
+    }
+
+    /**
+     * @param {number} z
+     * @returns {string} the scenery zone there (LightLaneTuning.ZONES; drawn from plan step 13)
+     */
+    zoneAt(z) {
+        const index = Math.max(0, Math.floor((z - this._start) / LightLaneTuning.ZONE_LENGTH));
+        while (this._zones.length <= index) {
+            const last  = ((this._zones.length > 0) ? this._zones[this._zones.length - 1] : null);
+            const zones = LightLaneTuning.ZONES;
+            let zone    = zones[this._zoneRandom.integer(0, (zones.length - 1))];
+            if (zone === last) {
+                zone = zones[(zones.indexOf(zone) + 1 + this._zoneRandom.integer(0, (zones.length - 2))) % zones.length];
+            }
+            this._zones.push(zone);
+        }
+
+        return this._zones[index];
+    }
+
+    // --- Difficulty seen by the generator ---
+
+    _tierAt(z) {
+        return ((this._locked !== null) ? this._locked : LightLaneDifficulty.tierAt(z));
+    }
+
+    _speedAt(z) {
+        return ((this._locked !== null) ? LightLaneDifficulty.tierSpeed(this._locked) : LightLaneDifficulty.targetSpeed(z));
+    }
+
+    // --- Events planned at the start: the forced section, the first encounters, the bonuses ---
+
+    _planEvents() {
+        const start            = this._start;
+        const unlocked         = (this._locked === null);
+        const fiveAt           = (LightLaneDifficulty.tierStart(LightLaneTuning.FIVE_TIER) + LightLaneTuning.FIVE_FIRST_AFTER);
+        this._fiveForced       = ((unlocked && (start < fiveAt)) ? fiveAt : null);
+        this._encounters.length = 0;
+        if (!unlocked) {
+            this._nextBonusZ = ((this._locked >= LightLaneTuning.BONUS_FIRST_TIER) ? (start + this._bonusStep(this._locked)) : Infinity);
+            return;
+        }
+        const firstBonus = (LightLaneDifficulty.tierStart(LightLaneTuning.BONUS_FIRST_TIER) + LightLaneTuning.BONUS_FIRST_AFTER);
+        for (const encounter of LightLaneTuning.ENCOUNTERS) {
+            const z = (LightLaneDifficulty.tierStart(encounter.tier) + LightLaneTuning.ENCOUNTER_AFTER);
+            if (z > start) {
+                this._encounters.push({z: z, pattern: LightLanePatterns.get(encounter.pattern), bonus: null});
             }
         }
-        const window  = Math.max(1, Math.min(LightLaneTuning.PATTERN_RECENT_MAX, (candidates.length - LightLaneTuning.PATTERN_RECENT_SPARE)));
-        const recent  = this._recent.slice(-window);
-        const allowed = candidates.filter((pattern) => !recent.includes(pattern.id));
-        const total   = allowed.reduce((sum, pattern) => (sum + pattern.weight), 0);
-        let draw      = (this._random.next() * total);
-        let chosen    = allowed[allowed.length - 1];
-        for (const pattern of allowed) {
-            draw -= pattern.weight;
-            if (draw < 0) {
-                chosen = pattern;
+        if (firstBonus > start) {
+            this._encounters.push({z: firstBonus, pattern: LightLanePatterns.get(LightLaneTrackGenerator.EMPTY), bonus: LightLaneTuning.BONUS_FIRST_TYPE});
+            this._encounters.sort((a, b) => (a.z - b.z));
+            this._nextBonusZ = Infinity;
+            return;
+        }
+        this._encounters.sort((a, b) => (a.z - b.z));
+        const tier       = LightLaneDifficulty.tierAt(start);
+        this._nextBonusZ = ((tier >= LightLaneTuning.BONUS_FIRST_TIER) ? (start + this._bonusStep(tier)) : (firstBonus + this._bonusStep(LightLaneTuning.BONUS_FIRST_TIER)));
+    }
+
+    _bonusStep(tier) {
+        let range = LightLaneTuning.BONUS_EVERY[0];
+        for (const every of LightLaneTuning.BONUS_EVERY) {
+            if (tier >= every.from) {
+                range = every;
+            }
+        }
+
+        return this._random.between(range.min, range.max);
+    }
+
+    // --- Sections (§ 3) ---
+
+    // Planned at least until z.
+    _planSections(z) {
+        while ((this._sections.length === 0) || (this._sections[this._sections.length - 1].to <= z)) {
+            this._planSection();
+        }
+    }
+
+    _planSection() {
+        const count   = this._sections.length;
+        const last    = ((count > 0) ? this._sections[count - 1] : null);
+        const from    = ((last !== null) ? last.to : this._start);
+        const section = ((this._spareSections.length > 0) ? this._spareSections.pop() : {});
+        const step    = LightLaneTuning.SECTION_STEP;
+        section.from  = from;
+        section.first = false;
+        if ((this._fiveForced !== null) && (Math.abs(from - this._fiveForced) < LightLaneTrackGenerator.EPSILON)) {
+            section.lanes      = LightLaneTuning.LANES_5.length;
+            section.to         = (from + LightLaneTuning.FIVE_FIRST_LENGTH);
+            section.first      = true;
+            this._fiveForced   = null;
+        } else {
+            const tier = this._tierAt(from);
+            const five = ((last !== null) && (last.lanes === LightLaneTuning.LANES_3.length) && (tier >= LightLaneTuning.FIVE_TIER)
+                && (this._fiveForced === null) && this._random.chance(this._fiveChance(tier)));
+            let length;
+            if (last === null) {
+                length = LightLaneTuning.SECTION_FIRST;
+            } else if (five) {
+                length = (step * this._random.integer((LightLaneTuning.SECTION_5_MIN / step), (LightLaneTuning.SECTION_5_MAX / step)));
+            } else {
+                length = (step * this._random.integer((LightLaneTuning.SECTION_3_MIN / step), (LightLaneTuning.SECTION_3_MAX / step)));
+            }
+            section.lanes = ((five) ? LightLaneTuning.LANES_5.length : LightLaneTuning.LANES_3.length);
+            section.to    = (from + length);
+            // The section of 3 lanes before the forced one of 5 ends right at it, shortened or lengthened.
+            if ((this._fiveForced !== null) && ((section.to > this._fiveForced) || ((this._fiveForced - section.to) < LightLaneTuning.SECTION_3_MIN))) {
+                section.to = this._fiveForced;
+            }
+        }
+        const speed       = this._speedAt(section.to);
+        const tile        = LightLaneTuning.TILE_LENGTH;
+        section.warnFrom  = Math.max(section.from, (Math.floor((section.to - (LightLaneTuning.WARN_TIME * speed)) / tile) * tile));
+        section.clearFrom = (section.to - (LightLaneTuning.CLEAR_TIME * speed));
+        this._sections.push(section);
+    }
+
+    _fiveChance(tier) {
+        return Math.min(LightLaneTuning.FIVE_CHANCE_MAX, (LightLaneTuning.FIVE_CHANCE + ((tier - LightLaneTuning.FIVE_TIER) * LightLaneTuning.FIVE_CHANCE_STEP)));
+    }
+
+    // --- Rows (§ 4) ---
+
+    _layRow(rowZ) {
+        const tier  = this._tierAt(rowZ);
+        const speed = this._speedAt(rowZ);
+        const base  = LightLaneTuning.ROW_GAPS[Math.min(tier, (LightLaneTuning.ROW_GAPS.length - 1))];
+        let gap     = LightLaneTrackGenerator._snap((base + this._random.between(0, LightLaneTuning.ROW_GAP_JITTER)) * speed);
+        let z       = rowZ;
+        let pattern = null;
+        let bonus   = null;
+        const row   = this._row;
+        this._planSections(rowZ + LightLaneTrackGenerator.SECTIONS_AHEAD);
+        const encounter = ((this._encounters.length > 0) ? this._encounters[0] : null);
+        let met         = false;
+        if ((this._imposed === null) && (encounter !== null) && ((rowZ + (gap / 2)) >= encounter.z)) {
+            // A first encounter: alone, ENCOUNTER_GAP times the gap before and after it.
+            this._encounters.shift();
+            z   = Math.max(rowZ, LightLaneTrackGenerator._snap(this._lastRowZ + (LightLaneTuning.ENCOUNTER_GAP * gap)));
+            gap = LightLaneTrackGenerator._snap(LightLaneTuning.ENCOUNTER_GAP * gap);
+            if (this._setRow(encounter.pattern, false, 0, z) && this._fits(row, true) && this._isFair(row, speed, tier)) {
+                pattern = encounter.pattern;
+                bonus   = encounter.bonus;
+                met     = true;
+            } else {
+                // Refused (a placement or the check): the row stays empty, the encounter moves to the next row.
+                encounter.z = (z + 1);
+                this._encounters.unshift(encounter);
+                z = row.z;
+            }
+            if (bonus !== null) {
+                this._nextBonusZ = (z + this._bonusStep(tier));
+            }
+        } else if (this._imposed !== null) {
+            pattern = this._imposedRow(z);
+        } else {
+            pattern = this._drawRow(z, tier, speed);
+        }
+        if (pattern !== null) {
+            z = row.z;
+            const longest = pattern.longest;
+            if (longest > (gap - (LightLaneTuning.LONG_ELEMENT_MARGIN * speed))) {
+                gap = LightLaneTrackGenerator._snap(longest + (LightLaneTuning.LONG_ELEMENT_MARGIN * speed));
+            }
+        }
+        this._lastRowZ = z;
+        this._nextRowZ = (z + gap);
+        if (pattern === null) {
+            // An empty row: a line of coins on lane 0 (the test mode's rows after its written ones: nothing).
+            if (this._imposed === null) {
+                this._line(0, z, this._nextRowZ);
+            }
+            return;
+        }
+        this._placeElements(row);
+        if ((bonus === null) && (z >= this._nextBonusZ)) {
+            bonus            = this._drawBonusType();
+            this._nextBonusZ = (z + this._bonusStep(tier));
+        }
+        const bonusLane = ((bonus !== null) ? this._placeBonus(row, bonus, z, this._nextRowZ) : null);
+        this._coins(row, z, speed, this._nextRowZ, bonusLane, met);
+    }
+
+    // The test mode's next row (then empty ones), laid without the check: the pattern, or null.
+    _imposedRow(z) {
+        const imposed = this._imposed.shift();
+        if (imposed === undefined) {
+            this._row.z = z;
+            return null;
+        }
+        const pattern = LightLanePatterns.get(imposed.id);
+        if (pattern === undefined) {
+            throw new Error('LightLaneTrackGenerator - unknown pattern ' + imposed.id);
+        }
+        this._setRow(pattern, imposed.mirror, imposed.offset, z);
+
+        return pattern;
+    }
+
+    // The weighted draw of § 4.5 with the fairness check; null after ROW_TRIES refusals (an empty row).
+    _drawRow(z, tier, speed) {
+        this._collectPlacements(z, tier);
+        for (let tries = 0; tries < LightLaneTuning.ROW_TRIES; tries++) {
+            const placement = this._pickPlacement();
+            if (placement === null) {
                 break;
             }
+            this._setRow(placement.pattern, placement.mirror, placement.offset, placement.z);
+            if (this._isFair(this._row, speed, tier)) {
+                this._remember(placement.pattern.id);
+                return placement.pattern;
+            }
+            placement.weight = 0;
         }
-        this._recent.push(chosen.id);
+        this._row.z = z;
+
+        return null;
+    }
+
+    // Every placement (pattern, mirror, offset) the tier and the place allow, with its weight (§ 4.5, steps 1 to 3).
+    _collectPlacements(z, realTier) {
+        const section   = this.sectionAt(z);
+        const five      = ((section !== null) && (section.lanes === LightLaneTuning.LANES_5.length));
+        const calm      = ((section !== null) && (section.first || (five && (z >= section.warnFrom))));
+        const catalogue = ((calm) ? 0 : this._catalogueTier(z, realTier));
+        const offsets   = ((five && !calm) ? LightLaneTrackGenerator.OFFSETS_5 : LightLaneTrackGenerator.OFFSETS_3);
+        const window    = this._recentWindow(catalogue, five);
+        let count       = 0;
+        for (const pattern of LightLanePatterns.TABLE) {
+            if ((pattern.weight <= 0) || (pattern.tier > catalogue) || pattern.enemy || this._isRecent(pattern.id, window)) {
+                continue;
+            }
+            const wide = (pattern.lanes.length === LightLaneTuning.LANES_5.length);
+            if (wide && (!five || calm)) {
+                continue;
+            }
+            const first = count;
+            for (let o = 0; o < ((wide) ? 1 : offsets.length); o++) {
+                for (const mirror of LightLaneTrackGenerator.MIRRORS) {
+                    const placement = this._placements[count];
+                    placement.pattern = pattern;
+                    placement.mirror  = mirror;
+                    placement.offset  = ((wide) ? 0 : offsets[o]);
+                    this._setRow(pattern, placement.mirror, placement.offset, z);
+                    if (!this._fits(this._row, false)) {
+                        continue;
+                    }
+                    placement.z = this._row.z;
+                    count++;
+                }
+            }
+            const factor = this._introFactor(pattern, z);
+            for (let i = first; i < count; i++) {
+                this._placements[i].weight = ((pattern.weight * factor) / (count - first));
+            }
+        }
+        this._placementCount = count;
+    }
+
+    // The tier whose catalogue a row draws from: the tier before during a tier's first BREATH_LENGTH metres.
+    _catalogueTier(z, tier) {
+        if ((this._locked !== null) || (tier === 0) || (z >= (LightLaneDifficulty.tierStart(tier) + LightLaneTuning.BREATH_LENGTH))) {
+            return tier;
+        }
+
+        return (tier - 1);
+    }
+
+    // The patterns of a tier come in from INTRO_FACTOR to 1 over INTRO_LENGTH metres after its breath (§ 4.5, step 3).
+    _introFactor(pattern, z) {
+        if ((this._locked !== null) || (pattern.tier === 0)) {
+            return 1;
+        }
+        const from = (LightLaneDifficulty.tierStart(pattern.tier) + LightLaneTuning.BREATH_LENGTH);
+        const s    = Math.min(1, Math.max(0, ((z - from) / LightLaneTuning.INTRO_LENGTH)));
+
+        return (LightLaneTuning.INTRO_FACTOR + ((1 - LightLaneTuning.INTRO_FACTOR) * s));
+    }
+
+    // w = max(1, min(PATTERN_RECENT_MAX, candidates − PATTERN_RECENT_SPARE)) of the catalogue.
+    _recentWindow(catalogue, five) {
+        let candidates = 0;
+        for (const pattern of LightLanePatterns.TABLE) {
+            if ((pattern.weight > 0) && (pattern.tier <= catalogue) && !pattern.enemy && (five || (pattern.lanes.length === LightLaneTuning.LANES_3.length))) {
+                candidates++;
+            }
+        }
+
+        return Math.max(1, Math.min(LightLaneTuning.PATTERN_RECENT_MAX, (candidates - LightLaneTuning.PATTERN_RECENT_SPARE)));
+    }
+
+    _isRecent(id, window) {
+        const recent = this._recent;
+        for (let i = Math.max(0, (recent.length - window)); i < recent.length; i++) {
+            if (recent[i] === id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    _remember(id) {
+        this._recent.push(id);
         if (this._recent.length > LightLaneTuning.PATTERN_RECENT_MAX) {
             this._recent.shift();
         }
-
-        return {pattern: chosen, mirror: this._random.chance(LightLaneTuning.PATTERN_MIRROR_CHANCE), offset: 0};
     }
 
-    _coins(placed, lanes, z, speed, nextZ) {
-        const pattern = placed.pattern;
-        const laneOf  = (i) => (LightLaneTuning.LANES_3[i] + placed.offset);
+    _pickPlacement() {
+        let total = 0;
+        for (let i = 0; i < this._placementCount; i++) {
+            total += this._placements[i].weight;
+        }
+        if (total <= 0) {
+            return null;
+        }
+        let draw = (this._random.next() * total);
+        let last = null;
+        for (let i = 0; i < this._placementCount; i++) {
+            const placement = this._placements[i];
+            if (placement.weight <= 0) {
+                continue;
+            }
+            last  = placement;
+            draw -= placement.weight;
+            if (draw < 0) {
+                return placement;
+            }
+        }
+
+        return last;
+    }
+
+    // The row being laid: its lanes (mirrored or not), its offset, its z aligned for a gap (§ 4.6). False when the
+    // pattern is wider than the lanes there.
+    _setRow(pattern, mirror, offset, z) {
+        const row   = this._row;
+        row.pattern = pattern;
+        row.lanes   = ((mirror) ? pattern.mirrored : pattern.lanes);
+        row.offset  = offset;
+        row.z       = LightLaneTrackGenerator._gapAligned(z, row.lanes, pattern.corridor);
+
+        return true;
+    }
+
+    // Every element of the row on a lane that exists over its length, clear of the warning zones (§ 3, § 4.5 step 2);
+    // `encounter`: a first encounter's row, laid whatever the zone.
+    _fits(row, encounter) {
+        const lanes = row.lanes;
+        for (let i = 0; i < lanes.length; i++) {
+            const code = lanes[i];
+            if (code === '.') {
+                continue;
+            }
+            const lane  = this._laneOf(row, i);
+            const front = this._frontOf(row, i);
+            const end   = (front + LightLaneTuning.OBSTACLES[code].length);
+            if (!this._laneSpans(lane, front, end)) {
+                return false;
+            }
+            if (!encounter && !this._clearOfWarnings(lane, front, end)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // The lane exists all along [from, to].
+    _laneSpans(lane, from, to) {
+        if (Math.abs(lane) <= LightLaneTrackGenerator.MIDDLE) {
+            return true;
+        }
+        const section = this.sectionAt(from);
+
+        return ((section !== null) && (section.lanes === LightLaneTuning.LANES_5.length) && (to <= section.to));
+    }
+
+    // Nothing on an outer lane in the warning zone, nothing on the lanes −1 and +1 in its last CLEAR_TIME, nothing on the
+    // outer lanes of the first section of 5.
+    _clearOfWarnings(lane, from, to) {
+        for (const section of this._sections) {
+            if ((section.lanes !== LightLaneTuning.LANES_5.length) || (to <= section.from) || (from >= section.to)) {
+                continue;
+            }
+            const outer = (Math.abs(lane) === LightLaneTrackGenerator.OUTER);
+            if (outer && (section.first || (to > section.warnFrom))) {
+                return false;
+            }
+            if ((Math.abs(lane) === LightLaneTrackGenerator.MIDDLE) && (to > section.clearFrom)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    _laneOf(row, i) {
+        const lanes = row.lanes;
+        if (lanes.length === LightLaneTuning.LANES_5.length) {
+            return LightLaneTuning.LANES_5[i];
+        }
+
+        return (LightLaneTuning.LANES_3[i] + row.offset);
+    }
+
+    // The centre element of a corridor is centred along its blocks (§ 4.2).
+    _frontOf(row, i) {
+        if (!row.pattern.corridor || (i !== 1)) {
+            return row.z;
+        }
+        const block = LightLaneTuning.OBSTACLES[row.lanes[0]].length;
+
+        return (row.z + LightLaneTrackGenerator._snap((block - LightLaneTuning.OBSTACLES[row.lanes[1]].length) / 2));
+    }
+
+    // --- Fairness (§ 8) ---
+
+    // The window from the last row's front to the end of this one: the void, the elements already laid, this row's.
+    _isFair(row, speed, tier) {
+        const occupancy = this._occupancy;
+        const z0        = this._lastRowZ;
+        const end       = (row.z + row.pattern.longest);
+        occupancy.begin(z0, (end + LightLaneTuning.CELL));
+        this._markVoid(z0, (end + LightLaneTuning.CELL + (LightLaneOccupancy.SEARCH_MARGIN * LightLaneTuning.CELL)));
+        for (const entity of this._active) {
+            if (entity.isObstacle() && (entity.getEnd() > z0)) {
+                LightLaneTrackGenerator._markEntity(occupancy, entity.getCode(), entity.getLane(), entity.getZ());
+            }
+        }
+        for (let i = 0; i < row.lanes.length; i++) {
+            const code = row.lanes[i];
+            if (code !== '.') {
+                LightLaneTrackGenerator._markEntity(occupancy, code, this._laneOf(row, i), this._frontOf(row, i));
+            }
+        }
+        const boots = ((this._locked ?? tier) >= LightLaneTuning.FAIR_BOOTS_TIER);
+        occupancy.applyVertical(speed, ((boots) ? LightLaneTuning.JUMP_TIME_BOOTS : LightLaneTuning.JUMP_TIME));
+
+        return occupancy.isFair(1, occupancy.cellOf(end - LightLaneTuning.CELL), speed);
+    }
+
+    // The outer lanes' cells without a tile.
+    _markVoid(z0, z1) {
+        const cell = LightLaneTuning.CELL;
+        for (let z = z0; z < z1; z += cell) {
+            if (this.laneExistsAt(LightLaneTrackGenerator.OUTER, z)) {
+                continue;
+            }
+            this._occupancy.mark(-LightLaneTrackGenerator.OUTER, z, (z + cell), LightLaneOccupancy.VOID);
+            this._occupancy.mark(LightLaneTrackGenerator.OUTER, z, (z + cell), LightLaneOccupancy.VOID);
+        }
+    }
+
+    static _markEntity(occupancy, code, lane, front) {
+        const spec = LightLaneTuning.OBSTACLES[code];
+        occupancy.mark(lane, front, (front + spec.length), LightLaneTrackGenerator.CELL_STATE[spec.kind]);
+    }
+
+    // --- Elements, bonuses, coins ---
+
+    _placeElements(row) {
+        const lanes = row.lanes;
+        for (let i = 0; i < lanes.length; i++) {
+            if (lanes[i] !== '.') {
+                this._take().setObstacle(lanes[i], this._laneOf(row, i), this._frontOf(row, i));
+            }
+        }
+    }
+
+    // Weighted, never the same twice in a row (§ 7.1).
+    _drawBonusType() {
+        const types   = LightLaneTrackGenerator.BONUS_TYPES;
+        const weights = LightLaneTrackGenerator.BONUS_WEIGHTS;
+        let total     = 0;
+        for (let i = 0; i < types.length; i++) {
+            total += ((types[i] === this._lastBonus) ? 0 : weights[i]);
+        }
+        let draw = (this._random.next() * total);
+        let pick = null;
+        for (let i = 0; i < types.length; i++) {
+            if (types[i] === this._lastBonus) {
+                continue;
+            }
+            pick  = types[i];
+            draw -= weights[i];
+            if (draw < 0) {
+                break;
+            }
+        }
+
+        return pick;
+    }
+
+    // Halfway to the next row, on a lane of the row without an element (lane 0 first, then the nearest the centre);
+    // none fits: no bonus. Returns its lane, or null.
+    _placeBonus(row, type, z, nextZ) {
+        const at = LightLaneTrackGenerator._snap((z + row.pattern.longest + nextZ) / 2);
+        for (const lane of LightLaneTrackGenerator.CENTRE_FIRST_5) {
+            if (this._rowHolds(row, lane) || !this._laneSpans(lane, at, at) || !this._clearOfWarnings(lane, at, at)) {
+                continue;
+            }
+            this._take().setBonus(type, lane, at);
+            this._lastBonus = type;
+            return lane;
+        }
+
+        return null;
+    }
+
+    _rowHolds(row, lane) {
+        for (let i = 0; i < row.lanes.length; i++) {
+            if ((row.lanes[i] !== '.') && (this._laneOf(row, i) === lane)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // `shown`: a first encounter's row, its coins always on the way the most starts reach.
+    _coins(row, z, speed, nextZ, bonusLane, shown) {
+        const pattern = row.pattern;
+        const lanes   = row.lanes;
         if (pattern.coins === 'arc') {
-            const i = lanes.indexOf('H');
-            this._arc(laneOf(i), z, speed);
+            // Its coins span a jump on both sides of the hurdle: none where a warning zone keeps the lane clear.
+            const lane = this._laneOf(row, lanes.indexOf('H'));
+            const span = (speed * LightLaneTuning.JUMP_TIME);
+            if (this._clearOfWarnings(lane, (z - span), (z + span))) {
+                this._arc(lane, z, speed);
+            }
             return;
         }
         if (pattern.coins === 'line') {
-            this._line(laneOf(1), z, nextZ);
+            this._line(this._laneOf(row, 1), (z + pattern.longest), nextZ);
             return;
         }
         if (pattern.coins === 'centre') {
             const length = LightLaneTuning.OBSTACLES[lanes[0]].length;
-            for (let at = (z + LightLaneTuning.COIN_SPACING / 2); at < (z + length); at += LightLaneTuning.COIN_SPACING) {
-                this._take().setCoin(laneOf(1), LightLaneTuning.COIN_HEIGHT, at);
+            for (let at = (z + (LightLaneTuning.COIN_SPACING / 2)); at < (z + length); at += LightLaneTuning.COIN_SPACING) {
+                this._take().setCoin(this._laneOf(row, 1), LightLaneTuning.COIN_HEIGHT, at);
             }
             return;
         }
-        if (!this._random.chance(LightLaneTuning.COIN_LINE_CHANCE)) {
+        if (!shown && !this._random.chance(LightLaneTuning.COIN_LINE_CHANCE)) {
             return;
         }
-        // The free lane nearest the centre, the centre first.
-        const free = LightLaneTrackGenerator.CENTRE_FIRST.find((i) => (lanes[i] === '.'));
-        if (free === undefined) {
-            const gate = LightLaneTrackGenerator.CENTRE_FIRST.find((i) => (lanes[i] === 'P'));
-            if (gate !== undefined) {
-                this._gateCoins(laneOf(gate), z);
+        // The clear lane most starts of the search reach; a tie: the nearest the centre (§ 9). Alongside the row.
+        const from = z;
+        const to   = (nextZ - LightLaneTuning.COIN_SPACING);
+        let best   = null;
+        let reach  = -1;
+        for (const lane of LightLaneTrackGenerator.CENTRE_FIRST_5) {
+            if ((lane === bonusLane) || this._rowHolds(row, lane) || !this._laneSpans(lane, from, to) || !this._clearOfWarnings(lane, from, to) || this._blockedAlong(lane, from, to)) {
+                continue;
             }
+            const count = this._occupancy.getReach(lane);
+            if (count > reach) {
+                best  = lane;
+                reach = count;
+            }
+        }
+        if (best !== null) {
+            this._line(best, (from - LightLaneTuning.COIN_SPACING), nextZ);
             return;
         }
-        const longest = Math.max(0, ...lanes.map((code) => ((code === '.') ? 0 : LightLaneTuning.OBSTACLES[code].length)));
-        this._line(laneOf(free), (z + longest), nextZ);
+        // No clear lane: low coins under a gate of the row, the nearest the centre.
+        for (const lane of LightLaneTrackGenerator.CENTRE_FIRST_5) {
+            for (let i = 0; i < lanes.length; i++) {
+                if ((lanes[i] === 'P') && (this._laneOf(row, i) === lane)) {
+                    this._gateCoins(lane, z);
+                    return;
+                }
+            }
+        }
+    }
+
+    // An obstacle laid earlier lies on the lane over [from, to] (a long block of a row before).
+    _blockedAlong(lane, from, to) {
+        for (const entity of this._active) {
+            if (entity.isObstacle() && (entity.getLane() === lane) && (entity.getZ() < to) && (entity.getEnd() > from)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // 5 to 10 coins, COIN_SPACING apart, from `from` and ending before the next row.
     _line(lane, from, nextZ) {
         const count = this._random.integer(LightLaneTuning.COIN_LINE_MIN, LightLaneTuning.COIN_LINE_MAX);
         for (let k = 0; k < count; k++) {
-            const at = (from + LightLaneTuning.COIN_SPACING * (k + 1));
+            const at = (from + (LightLaneTuning.COIN_SPACING * (k + 1)));
             if (at > (nextZ - LightLaneTuning.COIN_SPACING)) {
                 break;
             }
@@ -221,21 +815,21 @@ class LightLaneTrackGenerator {
         const T       = LightLaneTuning.JUMP_TIME;
         const H       = LightLaneTuning.JUMP_HEIGHT;
         const depth   = ((2 * LightLaneTuning.RUNNER_HALF_DEPTH) + (spec.z1 - spec.z0));
-        const [from, until] = LightLaneTrackGenerator.hurdleClearWindow();
-        const early   = ((until * T) - (depth / speed));
+        const from    = LightLaneTrackGenerator.hurdleClearFrom();
+        const early   = (((1 - from) * T) - (depth / speed));
         const late    = (from * T);
         const contact = ((z + spec.z0) - LightLaneTuning.RUNNER_HALF_DEPTH);
         const start   = (contact - (speed * ((early + late) / 2)));
         for (let k = 0; k < LightLaneTuning.COIN_ARC_COUNT; k++) {
-            const t = (T * (k + 1) / (LightLaneTuning.COIN_ARC_COUNT + 1));
+            const t = ((T * (k + 1)) / (LightLaneTuning.COIN_ARC_COUNT + 1));
             const y = (4 * H * (t / T) * (1 - (t / T)));
             this._take().setCoin(lane, (y + LightLaneTuning.COIN_HEIGHT), (start + (speed * t)));
         }
     }
 
     _take() {
-        const entity  = ((this._pool.length > 0) ? this._pool.pop() : new LightLaneEntity());
-        entity.serial = ++this._serial;
+        const entity = ((this._pool.length > 0) ? this._pool.pop() : new LightLaneEntity());
+        entity.setSerial(++this._serial);
         this._active.push(entity);
 
         return entity;
@@ -244,7 +838,13 @@ class LightLaneTrackGenerator {
     // A row holding a gap is moved on until its gap starts at a tile's start + holeFrom (generation § 4.6); the gap
     // centred in a corridor (G4) stands its centring offset ahead of the row.
     static _gapAligned(z, lanes, corridor) {
-        const index = lanes.findIndex((code) => ((code !== '.') && (LightLaneTuning.OBSTACLES[code].kind === LightLaneEntity.GAP)));
+        let index = -1;
+        for (let i = 0; i < lanes.length; i++) {
+            if ((lanes[i] !== '.') && !LightLanePatterns.isEnemy(lanes[i]) && (LightLaneTuning.OBSTACLES[lanes[i]].kind === LightLaneEntity.GAP)) {
+                index = i;
+                break;
+            }
+        }
         if (index < 0) {
             return z;
         }
@@ -252,20 +852,17 @@ class LightLaneTrackGenerator {
         const offset = ((corridor && (index === 1)) ? LightLaneTrackGenerator._snap((LightLaneTuning.OBSTACLES[lanes[0]].length - spec.length) / 2) : 0);
         const tile   = LightLaneTuning.TILE_LENGTH;
 
-        return (((Math.ceil(((z + offset) - spec.holeFrom) / tile) * tile) + spec.holeFrom) - offset);
+        return (((Math.ceil((((z + offset) - spec.holeFrom) / tile) - LightLaneTrackGenerator.EPSILON) * tile) + spec.holeFrom) - offset);
     }
 
     /**
-     * The share of a normal jump (t / T) during which the feet are above the hurdle's top: 4H·u(1 − u) ≥ y1, so u in
-     * [(1 − √(1 − y1 / H)) / 2, 1 − that] (gameplay § 4; 0.173 to 0.827 with the start values). Follows JUMP_HEIGHT and
-     * the hurdle's height when they are tuned.
+     * The share of a normal jump (t / T) from which the feet are above the hurdle's top, until 1 − that share:
+     * 4H·u(1 − u) ≥ y1, so u from (1 − √(1 − y1 / H)) / 2 (gameplay § 4; 0.173 with the start values).
      *
-     * @returns {number[]} [from, until]
+     * @returns {number}
      */
-    static hurdleClearWindow() {
-        const from = ((1 - Math.sqrt(1 - (LightLaneTuning.OBSTACLES.H.y1 / LightLaneTuning.JUMP_HEIGHT))) / 2);
-
-        return [from, (1 - from)];
+    static hurdleClearFrom() {
+        return ((1 - Math.sqrt(1 - (LightLaneTuning.OBSTACLES.H.y1 / LightLaneTuning.JUMP_HEIGHT))) / 2);
     }
 
     static _snap(value) {
@@ -273,5 +870,32 @@ class LightLaneTrackGenerator {
     }
 }
 
-// The lanes of a 3-lane row (indices), the centre first.
-LightLaneTrackGenerator.CENTRE_FIRST = Object.freeze([1, 0, 2]);
+// The middle lanes (|lane| ≤ 1) always exist; the outer ones (|lane| = 2) in a section of 5.
+LightLaneTrackGenerator.MIDDLE         = 1;
+LightLaneTrackGenerator.OUTER          = 2;
+// Lanes the nearest the centre first.
+LightLaneTrackGenerator.CENTRE_FIRST_5 = Object.freeze([0, -1, 1, -2, 2]);
+// Offsets of a 3-lane pattern in a section of 3 or of 5 lanes (§ 4.2).
+LightLaneTrackGenerator.OFFSETS_3      = Object.freeze([0]);
+LightLaneTrackGenerator.OFFSETS_5      = Object.freeze([-1, 0, 1]);
+// A placement as drawn and mirrored.
+LightLaneTrackGenerator.MIRRORS        = Object.freeze([false, true]);
+// Room for every placement: patterns × offsets × mirrors.
+LightLaneTrackGenerator.PLACEMENTS_MAX = 400;
+// Sections planned this far past a row (its longest element and its coins).
+LightLaneTrackGenerator.SECTIONS_AHEAD = 100;
+// The bonus types and their draw weights, in a fixed order.
+LightLaneTrackGenerator.BONUS_TYPES    = Object.freeze(Object.keys(LightLaneTuning.BONUS_TYPES));
+LightLaneTrackGenerator.BONUS_WEIGHTS  = Object.freeze(Object.values(LightLaneTuning.BONUS_TYPES));
+// The first encounter of the first bonus: a row without any element.
+LightLaneTrackGenerator.EMPTY          = 'N0';
+LightLaneTrackGenerator.EPSILON        = 1e-6;
+// The scenery zones' own random source: seeded from the run's, so the track never depends on when they are read.
+LightLaneTrackGenerator.ZONE_SEED      = 0x5A17;
+// The occupancy of each kind of element (§ 8.1).
+LightLaneTrackGenerator.CELL_STATE     = Object.freeze({
+    hurdle: LightLaneOccupancy.JUMP,
+    gate:   LightLaneOccupancy.SLIDE,
+    block:  LightLaneOccupancy.BLOCKED,
+    gap:    LightLaneOccupancy.GAP,
+});

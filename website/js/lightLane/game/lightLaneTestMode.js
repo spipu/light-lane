@@ -47,8 +47,9 @@ class LightLaneTestMode {
     }
 
     /**
-     * Against what the game has today: a tier from 0 to TIER_LAST, written rows of known 3-lane patterns without enemies (the
-     * 5 lanes and the enemies come with plan steps 10 and 11). The robot (`pilot`) does not exist yet: said once.
+     * Against what the game has today: a tier from 0 to TIER_LAST, written rows of known patterns without enemies (they
+     * come with plan step 11), a 3-lane one at an offset of −1 to +1 (laid on the outer lanes: where a section of 5 has
+     * them). The robot (`pilot`) does not exist yet: said once.
      *
      * @returns {LightLaneTestMode} this
      * @throws {Error} on an option the game cannot play
@@ -62,8 +63,11 @@ class LightLaneTestMode {
             if (pattern === undefined) {
                 throw new Error('LightLaneTestMode - unknown pattern ' + row.id);
             }
-            if ((row.offset !== 0) || (pattern.lanes.length !== 3) || pattern.lanes.some((code) => LightLanePatterns.ENEMIES.includes(code))) {
-                throw new Error('LightLaneTestMode - pattern ' + row.id + ' needs the 5 lanes or the enemies (not there yet)');
+            if (pattern.enemy) {
+                throw new Error('LightLaneTestMode - pattern ' + row.id + ' needs the enemies (not there yet)');
+            }
+            if ((Math.abs(row.offset) > 1) || ((row.offset !== 0) && (pattern.lanes.length !== 3))) {
+                throw new Error('LightLaneTestMode - pattern ' + row.id + ' cannot stand at offset ' + row.offset);
             }
         }
         if (this._pilot) {

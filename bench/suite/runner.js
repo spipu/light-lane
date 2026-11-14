@@ -24,7 +24,7 @@ function run() {
     let peak = 0;
     let steps = 1;
     while (r.isJumping() && (steps < 1000)) {
-        peak = Math.max(peak, r.y);
+        peak = Math.max(peak, r.getY());
         r.step(step, null, events);
         steps++;
     }
@@ -37,13 +37,13 @@ function run() {
     for (let i = 0; i < 30; i++) {
         r.step(step, null, events);
     }
-    const height = r.y;
+    const height = r.getY();
     r.step(step, [Sampler.SLIDE], events);
-    c.check('fast drop: falls at ' + Tuning.FAST_DROP_SPEED + ' m/s', close(height - r.y, Tuning.FAST_DROP_SPEED * step, 1e-9));
+    c.check('fast drop: falls at ' + Tuning.FAST_DROP_SPEED + ' m/s', close(height - r.getY(), Tuning.FAST_DROP_SPEED * step, 1e-9));
     while (r.isJumping()) {
         r.step(step, null, events);
     }
-    c.check('fast drop: a slide on landing', (r.isSliding() && (r.y === 0)));
+    c.check('fast drop: a slide on landing', (r.isSliding() && (r.getY() === 0)));
 
     // Slide: SLIDE_TIME, low box.
     r = new Runner(world);
@@ -64,16 +64,16 @@ function run() {
         r.step(step, null, events);
     }
     const s = Math.min(1, ((half * step) / Tuning.LANE_CHANGE_TIME));
-    c.check('lane change: smoothstep (3s² − 2s³) on the way', close(r.x, Tuning.LANE_WIDTH * ((3 * s * s) - (2 * s * s * s)), 1e-9), r.x.toFixed(4));
+    c.check('lane change: smoothstep (3s² − 2s³) on the way', close(r.getX(), Tuning.LANE_WIDTH * ((3 * s * s) - (2 * s * s * s)), 1e-9), r.getX().toFixed(4));
     for (let i = 0; i < half; i++) {
         r.step(step, null, events);
     }
-    c.check('lane change: on lane +1 after ' + Tuning.LANE_CHANGE_TIME + ' s', ((r.x === Tuning.LANE_WIDTH) && (r.getLaneSide() === 0) && (r.lane === 1)));
+    c.check('lane change: on lane +1 after ' + Tuning.LANE_CHANGE_TIME + ' s', ((r.getX() === Tuning.LANE_WIDTH) && (r.getLaneSide() === 0) && (r.getLane() === 1)));
 
     // A lane that does not exist: refused, no move.
     events.clear();
     r.step(step, [Sampler.RIGHT], events);
-    c.check('missing lane: refused', ((r.lane === 1) && (events.getCount() === 1) && (events.get(0).type === 'refuse')));
+    c.check('missing lane: refused', ((r.getLane() === 1) && (events.getCount() === 1) && (events.get(0).type === 'refuse')));
 
     // Stumble: slower, then back; fragile; a second one kills.
     r = new Runner(world);
@@ -101,7 +101,7 @@ function run() {
     for (let i = 0; i < 40; i++) {
         r.step(step, null, events);
     }
-    c.check('side stumble: back on the lane of origin', ((r.lane === 0) && (r.x === 0)), 'x ' + r.x);
+    c.check('side stumble: back on the lane of origin', ((r.getLane() === 0) && (r.getX() === 0)), 'x ' + r.getX());
 
     return c.failures;
 }
