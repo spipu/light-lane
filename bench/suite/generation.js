@@ -1,7 +1,8 @@
 /**
  * Generation suite (generation § 1, plan step 8's provisional generator): the track depends on the seed only — the same
  * seed gives the same rows, another seed others —, rows stay on the 0.5 m grid and a gap's hole starts at its tile's
- * start + holeFrom, generated ahead of the runner up to GENERATE_AHEAD, retired behind it. The full generation suite
+ * start + holeFrom, generated ahead of the runner up to GENERATE_AHEAD, retired behind it. The speed by tier, up to
+ * 35 m/s at tier 21. The full generation suite
  * (tiers, sections, fairness) comes with plan step 10.
  */
 
@@ -28,6 +29,14 @@ function run() {
 
         return [...seen.values()];
     };
+
+    // The speed by tier (gameplay § 9.1): the table to tier 7, then +1 m/s every 1 000 m, 35 m/s at tier 21, no further.
+    const Simulation = game.get('LightLaneSimulation');
+    c.check('tier 7: 4 200 m, 21.5 m/s', ((Simulation.tierAt(4200) === 7) && (Simulation.tierSpeed(7) === 21.5)));
+    c.check('tier 8: 5 200 m, 22.5 m/s', ((Simulation.tierAt(5200) === 8) && (Simulation.tierSpeed(8) === 22.5)));
+    c.check('tier 21: 18 200 m, 35 m/s', ((Simulation.tierAt(18200) === 21) && (Simulation.tierSpeed(21) === 35)));
+    c.check('past 18 200 m: still tier 21 at 35 m/s', ((Simulation.tierAt(100000) === 21) && (Simulation.tierSpeed(Simulation.tierAt(100000)) === 35)));
+    c.check('one tier every 1 000 m after tier 7', [9, 10, 15, 20].every((tier) => (Simulation.tierStart(tier) === (4200 + ((tier - 7) * 1000))) && (Simulation.tierAt(Simulation.tierStart(tier) - 1) === (tier - 1))));
 
     const first = track(7);
     c.check('a track of ' + LENGTH + ' m holds elements', (first.length > 100), first.length + ' elements');

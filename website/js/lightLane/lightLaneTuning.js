@@ -37,11 +37,12 @@ LightLaneTuning.TIERS = [
     {from: 3300, speed: 20.0},
     {from: 4200, speed: 21.5},
 ];
-// Tiers 8 to 12: one every TIER_LATE_LENGTH metres after tier 7, TIER_LATE_SPEED_STEP faster, capped.
+// Tiers 8 to TIER_LAST: one every TIER_LATE_LENGTH metres after tier 7, TIER_LATE_SPEED_STEP faster, up to SPEED_MAX
+// (user decision: 35 m/s, reached at tier 21, 18 200 m, about 13 min of running).
 LightLaneTuning.TIER_LATE_LENGTH     = 1000;
 LightLaneTuning.TIER_LATE_SPEED_STEP = 1.0;
-LightLaneTuning.TIER_LAST            = 12;
-LightLaneTuning.SPEED_MAX            = 26.0;
+LightLaneTuning.TIER_LAST            = 21;
+LightLaneTuning.SPEED_MAX            = 35.0;
 // On entering a tier, the speed reaches its target linearly in this time.
 LightLaneTuning.TIER_RAMP_SECONDS = 6.0;
 

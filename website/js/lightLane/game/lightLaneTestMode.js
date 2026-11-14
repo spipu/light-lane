@@ -47,15 +47,15 @@ class LightLaneTestMode {
     }
 
     /**
-     * Against what the game has today: a tier of the table, written rows of known 3-lane patterns without enemies (the
+     * Against what the game has today: a tier from 0 to TIER_LAST, written rows of known 3-lane patterns without enemies (the
      * 5 lanes and the enemies come with plan steps 10 and 11). The robot (`pilot`) does not exist yet: said once.
      *
      * @returns {LightLaneTestMode} this
      * @throws {Error} on an option the game cannot play
      */
     validate() {
-        if ((this._tier !== null) && ((this._tier < 0) || (this._tier >= LightLaneTuning.TIERS.length))) {
-            throw new Error('LightLaneTestMode - tier ' + this._tier + ' out of 0..' + (LightLaneTuning.TIERS.length - 1));
+        if ((this._tier !== null) && ((this._tier < 0) || (this._tier > LightLaneTuning.TIER_LAST))) {
+            throw new Error('LightLaneTestMode - tier ' + this._tier + ' out of 0..' + LightLaneTuning.TIER_LAST);
         }
         for (const row of (this._track ?? [])) {
             const pattern = LightLanePatterns.get(row.id);
