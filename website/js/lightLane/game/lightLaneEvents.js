@@ -56,3 +56,5 @@ LightLaneEvents.STUMBLE = 'stumble';
 LightLaneEvents.COIN    = 'coin';      // entity: the coin
 LightLaneEvents.DEATH   = 'death';     // value: LightLaneRunner.DEATH_*
 LightLaneEvents.START   = 'start';     // the countdown is over
+LightLaneEvents.ANNOUNCE = 'announce';  // value: a Sentinel's attack (LightLaneSentinel type), or a stalker's kind (entity: the stalker)
+LightLaneEvents.STRIKE   = 'strike';    // the Sentinel's column falls

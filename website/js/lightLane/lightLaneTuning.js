@@ -142,6 +142,10 @@ LightLaneTuning.COLOR = Object.freeze({
     WARN:           [216, 160, 75],
     DANGER:         [206, 123, 66],
     LETHAL:         [199, 76, 53],
+    // The enemies' shell, a muted orange to be seen better on the dark track (user requests): top, flanks, bottom.
+    ENEMY_TOP:      [150, 88, 50],
+    ENEMY_SIDE:     [118, 68, 38],
+    ENEMY_BOTTOM:   [64, 38, 22],
 });
 
 // --- Lines (art § 4) ---
@@ -150,6 +154,8 @@ LightLaneTuning.LINE_SIZE_DECOR = 0.05;
 LightLaneTuning.LINE_OUTSET     = 0.01;
 // Marks laid on the floor (the warning zone's chevrons) stand this far above the tiles' top (art § 4).
 LightLaneTuning.FLOOR_LIFT      = 0.02;
+// Marks laid on the floor are drawn over it (Instance.setRenderDepthBias, art § 4).
+LightLaneTuning.FLOOR_DEPTH_BIAS = 0.05;
 // The warning zone's chevron (art § 5.2 arrow), [across, along], m.
 LightLaneTuning.ARROW_SIZE      = Object.freeze([1.2, 0.8]);
 // --- Fog under the track: the user's 60 frames (.source/fog/buildFog.py → assets/lightLane/textures/fog/) ---
@@ -217,7 +223,134 @@ LightLaneTuning.OBSTACLES = Object.freeze({
     B16: {kind: 'block', halfWidth: 0.80, y0: 0, y1: 3.10, z0: 0.05, z1: -0.05, length: 16},
     X3:  {kind: 'gap', halfWidth: 0.70, y0: 0, y1: 0.05, z0: 0.30, z1: -0.30, length: 3.0, holeFrom: 3.5},
     X5:  {kind: 'gap', halfWidth: 0.70, y0: 0, y1: 0.05, z0: 0.30, z1: -0.30, length: 4.5, holeFrom: 3.0},
+    // Enemies (gameplay § 6): two-wheelers of a real motorbike's size (user decision), their box from their moving front;
+    // laid by their meeting point (generation § 5).
+    'R':  {kind: 'prowler', halfWidth: 0.40, y0: 0.05, y1: 1.30, z0: 0.10, z1: 3.10, length: 3.2},
+    'T<': {kind: 'stalker', halfWidth: 0.40, y0: 0.05, y1: 1.30, z0: 0.10, z1: 3.10, length: 3.2, side: -1},
+    'T>': {kind: 'stalker', halfWidth: 0.40, y0: 0.05, y1: 1.30, z0: 0.10, z1: 3.10, length: 3.2, side: 1},
 });
+// --- Enemies (gameplay § 6, generation § 5) ---
+// An enemy runs to the runner at ENEMY_SPEED_SHARE of its real speed: z = zm + share × (zm − zRunner), so it reaches its
+// meeting point zm exactly when the runner does.
+LightLaneTuning.ENEMY_SPEED_SHARE  = 0.5;
+// Drawn (activated) within ENEMY_SHOWN ahead of the runner.
+LightLaneTuning.ENEMY_SHOWN        = 135;
+// A stalker (τ = time to the meeting point): announced from STALKER_WARN, moves across from STALKER_MOVE over
+// STALKER_MOVE_TIME (S-curve), then stays on its new lane.
+LightLaneTuning.STALKER_WARN       = 2.4;
+LightLaneTuning.STALKER_MOVE       = 1.6;
+LightLaneTuning.STALKER_MOVE_TIME  = 0.5;
+// While it moves across, a stalker only leans into its move (user request: no turn of its heading): ENEMY_LEAN degrees of
+// lean a degree of the angle of its path (its sideways speed against its own speed ahead), ENEMY_LEAN_MAX at most.
+LightLaneTuning.ENEMY_LEAN         = 1.2;
+LightLaneTuning.ENEMY_LEAN_MAX     = 30;
+// Its floor arrow on the lane it goes to, STALKER_ARROW_AHEAD before it ([across, along] STALKER_ARROW_SIZE).
+LightLaneTuning.STALKER_ARROW_AHEAD = 6;
+LightLaneTuning.STALKER_ARROW_SIZE  = Object.freeze([2.4, 1.6]);
+// The lanes an enemy reserves around its meeting point (nothing else on them), and the cells it blocks in the
+// fairness check (generation § 5, § 8.1).
+LightLaneTuning.ENEMY_RESERVE      = Object.freeze([-5, 50]);
+LightLaneTuning.ENEMY_BLOCKS       = Object.freeze([-2, 6]);
+// Drawn shape of the two-wheelers (art § 5.2, user decision: the language of a light cycle, an original design), origin
+// at the centre of its bottom, front towards −z. Wheels without hub: centres at `wheelZ`, `radius`, a tyre `tyre` thick
+// (±halfThick across), `segments` around. The shell: stations along z [z, centre y, half width, half height], each a
+// rounded section of `section` points; a head light `light` [width, height] at its nose; 3 chevrons `chevron`
+// [width, depth] on a stalker's tail.
+LightLaneTuning.ENEMY_SHAPE = Object.freeze({
+    wheelZ:    Object.freeze([-1.0, 1.0]),
+    radius:    0.60,
+    tyre:      0.12,
+    halfThick: 0.17,
+    segments:  12,
+    stations:  Object.freeze([
+        Object.freeze([-1.60, 0.75, 0.10, 0.10]),
+        Object.freeze([-1.20, 0.85, 0.38, 0.30]),
+        Object.freeze([-0.50, 0.95, 0.30, 0.35]),
+        Object.freeze([0.30, 1.05, 0.28, 0.35]),
+        Object.freeze([1.00, 0.90, 0.40, 0.35]),
+        Object.freeze([1.60, 0.80, 0.15, 0.15]),
+    ]),
+    section:   8,
+    light:     Object.freeze([0.16, 0.08]),
+    chevron:   Object.freeze([0.36, 0.16]),
+    chevrons:  3,
+});
+
+// --- The Sentinel (gameplay § 7, generation § 7.2) ---
+// First pass SENTINEL_FIRST_AFTER into tier SENTINEL_TIER, then every SENTINEL_EVERY [min, max] metres.
+LightLaneTuning.SENTINEL_TIER        = 6;
+LightLaneTuning.SENTINEL_FIRST_AFTER = 150;
+LightLaneTuning.SENTINEL_EVERY       = Object.freeze([900, 1400]);
+// Its pass: ARRIVE from behind and above (SENTINEL_FROM [y, z behind the runner]) to SENTINEL_AT [y, z ahead]; PRESENT,
+// bobbing SENTINEL_BOB m at SENTINEL_BOB_HZ, following the runner's lane at rate SENTINEL_FOLLOW; LEAVE ahead and up by
+// SENTINEL_LEAVE [y, z].
+LightLaneTuning.SENTINEL_ARRIVE      = 2.0;
+LightLaneTuning.SENTINEL_PRESENT     = 8.0;
+LightLaneTuning.SENTINEL_LEAVE_TIME  = 1.5;
+LightLaneTuning.SENTINEL_FROM        = Object.freeze([12, -6]);
+LightLaneTuning.SENTINEL_AT          = Object.freeze([4.0, 34]);
+LightLaneTuning.SENTINEL_LEAVE       = Object.freeze([10, 60]);
+LightLaneTuning.SENTINEL_BOB         = 0.2;
+LightLaneTuning.SENTINEL_BOB_HZ      = 0.5;
+LightLaneTuning.SENTINEL_FOLLOW      = 1.6;
+// Its arrival's S-curve swings SENTINEL_SWAY across.
+LightLaneTuning.SENTINEL_SWAY        = 2.0;
+// The track is bridled from its arrival for SENTINEL_BRIDLE × the target speed: these patterns only, gaps × SENTINEL_GAP.
+LightLaneTuning.SENTINEL_BRIDLE      = 11.5;
+LightLaneTuning.SENTINEL_GAP         = 1.4;
+LightLaneTuning.SENTINEL_PATTERNS    = Object.freeze(['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'D1', 'D2', 'D3', 'D4', 'D5']);
+// Three attacks a pass, at these times of its presence; strike STRIKE_CHANCE, else a sweep, low or high (never the same
+// height twice in a row).
+LightLaneTuning.SENTINEL_ATTACKS     = Object.freeze([1.0, 3.4, 5.6]);
+LightLaneTuning.STRIKE_CHANCE        = 0.5;
+LightLaneTuning.SWEEP_LOW_CHANCE     = 0.5;
+// Strike (§ 7.2): announced STRIKE_WARN (a red mark on the lane from STRIKE_MARK [behind, ahead] of the runner, its width
+// in STRIKE_WIDTHS steps, blinking at STRIKE_BLINK_HZ over the last STRIKE_BLINK s), then a column STRIKE_TIME long:
+// deadly within ±STRIKE_HALF_WIDTH of the lane's centre; its trace dies in STRIKE_TRACE.
+LightLaneTuning.STRIKE_WARN          = 1.1;
+LightLaneTuning.STRIKE_MARK          = Object.freeze([2, 20]);
+LightLaneTuning.STRIKE_WIDTHS        = Object.freeze([0.1, 0.4, 0.8, 1.2, 1.6]);
+LightLaneTuning.STRIKE_BLINK         = 0.4;
+LightLaneTuning.STRIKE_BLINK_HZ      = 6;
+LightLaneTuning.STRIKE_TIME          = 0.25;
+LightLaneTuning.STRIKE_HALF_WIDTH    = 0.70;
+LightLaneTuning.STRIKE_TRACE         = 1.0;
+LightLaneTuning.STRIKE_FLASH         = 0.35;
+LightLaneTuning.STRIKE_BEAM          = Object.freeze([1.6, 6.0, 22]);
+// The mark's and the ray's see-through (art § 5.2).
+LightLaneTuning.STRIKE_MARK_ALPHA    = 0.6;
+LightLaneTuning.SWEEP_ALPHA          = 0.5;
+// Sweep (§ 7.3): a frame SWEEP_AHEAD of the runner for SWEEP_WARN (blinking at SWEEP_BLINK_HZ), then a ray coming at
+// SWEEP_SPEED relative, gone SWEEP_PAST behind the runner; its box [y0, y1] low or high, SWEEP_DEPTH thick; drawn
+// [y0, y1] by SWEEP_DRAWN, SWEEP_THICK thick, SWEEP_WIDTH [3 lanes, 5 lanes] wide.
+LightLaneTuning.SWEEP_AHEAD          = 26;
+LightLaneTuning.SWEEP_WARN           = 0.9;
+LightLaneTuning.SWEEP_BLINK_HZ       = 4;
+LightLaneTuning.SWEEP_SPEED          = 22;
+LightLaneTuning.SWEEP_PAST           = 2;
+LightLaneTuning.SWEEP_BOX            = Object.freeze({low: Object.freeze([0.20, 0.60]), high: Object.freeze([1.15, 1.45])});
+LightLaneTuning.SWEEP_DRAWN          = Object.freeze({low: Object.freeze([0.15, 0.65]), high: Object.freeze([1.10, 1.50])});
+LightLaneTuning.SWEEP_DEPTH          = 0.10;
+LightLaneTuning.SWEEP_THICK          = 0.20;
+LightLaneTuning.SWEEP_WIDTH          = Object.freeze([6.4, 10.4]);
+// Its shape (art § 5.2): a flat swept wing (outline [x, z], `thick`), two fins under it, a slot at its front.
+LightLaneTuning.SENTINEL_SHAPE = Object.freeze({
+    wing:  Object.freeze([[-1.0, -2.0], [1.0, -2.0], [3.0, 1.0], [1.2, 2.0], [-1.2, 2.0], [-3.0, 1.0]]),
+    thick: 0.8,
+    fin:   Object.freeze({x: 1.8, size: Object.freeze([0.1, 1.2, 1.6])}),
+    slot:  Object.freeze([1.6, 0.4]),
+});
+
+// --- The robot (tech § 8.1): every ROBOT_STEP it looks ROBOT_LATENCY ahead, tries each order then a second one
+// ROBOT_STEP later, each branch played ROBOT_HORIZON after the latency; a stumble costs ROBOT_STUMBLE, a coin earns 1.
+LightLaneTuning.ROBOT_STEP     = 0.15;
+LightLaneTuning.ROBOT_LATENCY  = 0.45;
+LightLaneTuning.ROBOT_HORIZON  = 1.2;
+LightLaneTuning.ROBOT_STUMBLE  = 1000;
+// A first order earns ROBOT_SAFETY for each second order that lives without a stumble after it.
+LightLaneTuning.ROBOT_SAFETY   = 3;
+// A death's cost, far above any stumble: the time it is put off is added (the longest reprieve wins among deaths).
+LightLaneTuning.ROBOT_DEATH    = 1000000;
 // Drawn shapes (art § 5.2), m. Hurdle: feet at ±halfWidth up to barBottom, a bar from barBottom to barTop, the red
 // cross under it over `cross` [x0, y0, x1, y1]. Gate: posts postSize² × postHeight at ±postX, a beam ±beamHalfWidth from
 // beamBottom to beamTop, the red cross above it. Block: halfWidth × height, vertical corners cut by `corner` at 45°, its
@@ -323,7 +456,9 @@ LightLaneTuning.FAIR_BOOTS_TIER  = 1;
 LightLaneTuning.ENCOUNTER_AFTER = 150;
 LightLaneTuning.ENCOUNTERS      = Object.freeze([
     Object.freeze({tier: 1, pattern: 'N1'}),
+    Object.freeze({tier: 3, pattern: 'E2'}),
     Object.freeze({tier: 4, pattern: 'G2'}),
+    Object.freeze({tier: 5, pattern: 'C2'}),
 ]);
 // The gaps before and after a first encounter's row, times the normal one.
 LightLaneTuning.ENCOUNTER_GAP = 1.5;

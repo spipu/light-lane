@@ -1,9 +1,10 @@
 /**
- * Generation suite (generation § 1 to § 4, § 6, § 7.1, § 8, § 9; plan step 10, tiers 0 to 2):
+ * Generation suite (generation § 1 to § 9; tiers 0 to 7 and 21):
  * - the difficulty: the start's rise from 10 to 15 m/s over 500 m, the tiers' speeds, 35 m/s at tier 21;
- * - the tier locked (§ 8.3), 5 seeds × 1 000 rows for tiers 0 to 2: the 0.5 m grid, the gaps' holes, no element on a
- *   lane that does not exist, the warning zones kept clear, the sections' rules, no repetition of the last Ids, few
- *   rows left empty by the fairness check, no coin on a block or a gap;
+ * - the tier locked (§ 8.3), 5 seeds × 1 000 rows for tiers 0 to 7 and 21: the 0.5 m grid, the gaps' holes, no element on
+ *   a lane that does not exist, the warning zones kept clear, the sections' rules, no repetition of the last Ids, few
+ *   rows left empty by the fairness check, no coin on a block or a gap; the enemies' reserved lanes clear (§ 5); the
+ *   Sentinel's bridled stretches (§ 7.2): its patterns only, no section ending inside;
  * - the frequencies of the patterns against the probabilities really offered at each row (chi-square, p > 0.01);
  * - a run from the start: the first encounters, the forced first section of 5 lanes, the first bonus.
  */
@@ -12,6 +13,8 @@ const {load, Checker} = require('../lib/gameContext.js');
 
 const SEEDS = [1, 2, 3, 4, 5];
 const ROWS  = 1000;
+// Rows the fairness check leaves empty (8 refusals): at most this share (2.3 % measured at 35 m/s, 0 to 2 % below).
+const EMPTY_MAX = 0.03;
 
 function run() {
     const game       = load();
@@ -46,7 +49,7 @@ function run() {
     c.check('the run: the start\'s rise at 250 m, 15 m/s at 600 m', (near(speeds[250], Difficulty.startSpeed(250), 0.02) && near(speeds[600], 15, 1e-9)), speeds[250].toFixed(3) + ', ' + speeds[600]);
 
     // --- Locked tiers 0 to 2 ---
-    for (const tier of [0, 1, 2]) {
+    for (const tier of [0, 1, 2, 3, 4, 5, 6, 7, 21]) {
         const stats = lockedRun(Generator, Entity, Tuning, Patterns, tier);
         c.check('tier ' + tier + ': elements on the 0.5 m grid', (stats.offGrid === 0), stats.offGrid + ' off it');
         c.check('tier ' + tier + ': gaps\' holes at their tile\'s start + holeFrom', (stats.badHoles === 0), stats.badHoles + ' misplaced');
@@ -55,9 +58,15 @@ function run() {
         c.check('tier ' + tier + ': sections on whole tiles, lengths in range', (stats.badSections === 0), stats.badSections + ' wrong of ' + stats.sections);
         c.check('tier ' + tier + ': ' + ((tier < 2) ? 'always 3 lanes' : 'sections of 5 lanes, never two in a row'), ((tier < 2) ? (stats.fives === 0) : ((stats.fives > 0) && (stats.twoFives === 0))), stats.fives + ' of 5 lanes, ' + stats.twoFives + ' in a row');
         c.check('tier ' + tier + ': no Id among the last ones', (stats.repeats === 0), stats.repeats + ' repeated');
-        c.check('tier ' + tier + ': rows left empty by the check < 2 %', (stats.empty < (0.02 * stats.rows)), stats.empty + ' of ' + stats.rows);
+        c.check('tier ' + tier + ': rows left empty by the check < ' + (EMPTY_MAX * 100) + ' %', (stats.empty < (EMPTY_MAX * stats.rows)), stats.empty + ' of ' + stats.rows);
         c.check('tier ' + tier + ': no coin on a block or a gap', (stats.badCoins === 0), stats.badCoins + ' misplaced');
         c.check('tier ' + tier + ': only the catalogue of the tier', (stats.outOfTier === 0), stats.outOfTier + ' above it');
+        if (tier >= 3) {
+            c.check('tier ' + tier + ': enemies laid, their reserved lanes clear', ((stats.enemies > 0) && (stats.inReserve === 0)), stats.enemies + ' enemies, ' + stats.inReserve + ' inside');
+        }
+        if (tier >= 6) {
+            c.check('tier ' + tier + ': bridled for the Sentinel: its patterns only, no section end', ((stats.bridled > 0) && (stats.badBridled === 0) && (stats.endInBridle === 0)), stats.bridled + ' rows, ' + stats.badBridled + ' wrong, ' + stats.endInBridle + ' ends inside');
+        }
         const chi = chiSquare(stats.observed, stats.expected);
         c.check('tier ' + tier + ': pattern frequencies as offered (chi-square, p > 0.01)', (chi.p > 0.01), 'chi² ' + chi.chi2.toFixed(1) + ', df ' + chi.df + ', p ' + chi.p.toFixed(3));
     }
@@ -84,7 +93,7 @@ function run() {
 // The rows of a locked tier: every element and section checked, the draws recorded.
 function lockedRun(Generator, Entity, Tuning, Patterns, tier) {
     const stats = {rows: 0, empty: 0, offGrid: 0, badHoles: 0, offTrack: 0, inWarning: 0, badSections: 0, sections: 0, fives: 0, twoFives: 0,
-        repeats: 0, badCoins: 0, outOfTier: 0, observed: new Map(), expected: new Map()};
+        repeats: 0, badCoins: 0, outOfTier: 0, observed: new Map(), expected: new Map(), enemies: 0, inReserve: 0, bridled: 0, badBridled: 0, endInBridle: 0};
     for (const seed of SEEDS) {
         const generator = new Generator().lockTier(tier).reset(seed, 0, null);
         const ids       = [];
@@ -119,6 +128,10 @@ function lockedRun(Generator, Entity, Tuning, Patterns, tier) {
             }
             ids.push(pattern.id);
             stats.outOfTier += ((pattern.tier > tier) ? 1 : 0);
+            if (this.isBridled(this._row.z)) {
+                stats.bridled++;
+                stats.badBridled += ((Tuning.SENTINEL_PATTERNS.includes(pattern.id)) ? 0 : 1);
+            }
             if ((offered !== null) && (offered.first === pattern.id)) {
                 for (const [id, p] of offered) {
                     stats.expected.set(id, ((stats.expected.get(id) ?? 0) + p));
@@ -129,10 +142,14 @@ function lockedRun(Generator, Entity, Tuning, Patterns, tier) {
         };
         const seen     = new Set();
         const sections = new Map();
+        const passes   = new Map();
         for (let z = 0; stats.rows < (ROWS * (SEEDS.indexOf(seed) + 1)); z += 3) {
             generator.update(z);
             for (const section of generator._sections) {
                 sections.set(section.from, {from: section.from, to: section.to, lanes: section.lanes, first: section.first, warnFrom: section.warnFrom, clearFrom: section.clearFrom});
+            }
+            for (const pass of generator._sentinels) {
+                passes.set(pass.z, {z: pass.z, end: pass.end});
             }
             for (const entity of generator.getActive()) {
                 if (seen.has(entity.getSerial())) {
@@ -148,6 +165,9 @@ function lockedRun(Generator, Entity, Tuning, Patterns, tier) {
                 stats.repeats++;
             }
         }
+        for (const section of sections.values()) {
+            stats.endInBridle += ([...passes.values()].some((pass) => ((section.to > pass.z) && (section.to < pass.end))) ? 1 : 0);
+        }
         let previous = null;
         for (const section of [...sections.values()].sort((a, b) => (a.from - b.from))) {
             stats.sections++;
@@ -155,7 +175,10 @@ function lockedRun(Generator, Entity, Tuning, Patterns, tier) {
             const five   = (section.lanes === 5);
             const [min, max] = ((five) ? [Tuning.SECTION_5_MIN, Tuning.SECTION_5_MAX] : [Tuning.SECTION_3_MIN, Tuning.SECTION_3_MAX]);
             const first  = (previous === null);
-            const ok     = (((section.from % Tuning.TILE_LENGTH) === 0) && ((length % Tuning.SECTION_STEP) === 0) && ((first) ? (length === Tuning.SECTION_FIRST) : ((length >= min) && (length <= max))));
+            // Lengthened past a bridled stretch of the Sentinel (§ 7.2): it ends within a step after the stretch.
+            const putOff = [...passes.values()].some((pass) => ((section.to >= pass.end) && ((section.to - pass.end) < Tuning.SECTION_STEP)));
+            const inRange = ((first) ? ((length === Tuning.SECTION_FIRST) || putOff) : ((length >= min) && ((length <= max) || putOff)));
+            const ok     = (((section.from % Tuning.TILE_LENGTH) === 0) && ((length % Tuning.SECTION_STEP) === 0) && inRange);
             stats.badSections += ((ok) ? 0 : 1);
             stats.fives       += ((five) ? 1 : 0);
             stats.twoFives    += ((five && (previous !== null) && (previous.lanes === 5)) ? 1 : 0);
@@ -192,6 +215,18 @@ function checkEntity(generator, entity, Entity, Tuning, stats) {
     }
     const cells = (z / Tuning.CELL);
     stats.offGrid += ((Math.abs(cells - Math.round(cells)) > 1e-6) ? 1 : 0);
+    // An enemy's lanes over its reservation: no other element; an element inside an enemy's laid before.
+    const [before, after] = Tuning.ENEMY_RESERVE;
+    for (const other of generator.getActive()) {
+        if (!other.isEnemy() || (other === entity) || !other.isObstacle()) {
+            continue;
+        }
+        const lanes = [other.getLane(), other.getToLane()];
+        if (lanes.includes(lane) && (z < (other.getZ() + after)) && (entity.getEnd() > (other.getZ() + before))) {
+            stats.inReserve++;
+        }
+    }
+    stats.enemies += ((entity.isEnemy()) ? 1 : 0);
     if (entity.getKind() === Entity.GAP) {
         const into = (((z % Tuning.TILE_LENGTH) + Tuning.TILE_LENGTH) % Tuning.TILE_LENGTH);
         stats.badHoles += ((Math.abs(into - Tuning.OBSTACLES[entity.getCode()].holeFrom) > 1e-6) ? 1 : 0);

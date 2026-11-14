@@ -47,6 +47,16 @@ class LightLaneRandom {
         return (this.next() < probability);
     }
 
+    /**
+     * @param {LightLaneRandom} other
+     * @returns {LightLaneRandom} this, at the same point of its sequence (the robot's copies)
+     */
+    copyFrom(other) {
+        this._state = other._state;
+
+        return this;
+    }
+
     // A seed for a new run.
     static freshSeed() {
         return (Date.now() >>> 0);

@@ -39,6 +39,18 @@ class LightLaneRunScore {
     }
 
     /**
+     * @param {LightLaneRunScore} other
+     * @returns {LightLaneRunScore} this, a copy of other (the robot)
+     */
+    copyFrom(other) {
+        this._distancePoints = other._distancePoints;
+        this._coinPoints     = other._coinPoints;
+        this._coins          = other._coins;
+
+        return this;
+    }
+
+    /**
      * @returns {int} the score shown
      */
     getScore() {

@@ -1,5 +1,5 @@
 {
-    "version": "v0.0078",
+    "version": "v0.0089",
     "files": {
         "assets": [
             "/assets/lightLane/models/runner.bin",
@@ -186,7 +186,9 @@
             "/js/lightLane/game/lightLaneCollision.js",
             "/js/lightLane/game/lightLaneOccupancy.js",
             "/js/lightLane/game/lightLaneTrackGenerator.js",
+            "/js/lightLane/game/lightLaneSentinel.js",
             "/js/lightLane/game/lightLaneSimulation.js",
+            "/js/lightLane/game/lightLaneRobot.js",
             "/js/lightLane/game/lightLaneObjectBuilder.js",
             "/js/lightLane/game/lightLaneModels.js",
             "/js/lightLane/game/lightLaneCamera.js",

@@ -22,7 +22,9 @@ const SOURCES     = [
     'js/lightLane/game/lightLaneCollision.js',
     'js/lightLane/game/lightLaneOccupancy.js',
     'js/lightLane/game/lightLaneTrackGenerator.js',
+    'js/lightLane/game/lightLaneSentinel.js',
     'js/lightLane/game/lightLaneSimulation.js',
+    'js/lightLane/game/lightLaneRobot.js',
 ];
 
 /**

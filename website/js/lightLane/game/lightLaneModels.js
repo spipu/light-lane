@@ -32,8 +32,27 @@ class LightLaneModels {
         }
         LightLaneModels._load(LightLaneModels.WARN_EDGES, LightLaneModels._warnEdges());
         for (const [suffix, side] of LightLaneModels.ARROW_SIDES) {
-            LightLaneModels._load(LightLaneModels.ARROW + suffix, LightLaneModels._arrow(side));
+            LightLaneModels._load(LightLaneModels.ARROW + suffix, LightLaneModels._arrow(side, LightLaneTuning.ARROW_SIZE));
+            LightLaneModels._load(LightLaneModels.STALKER_ARROW + suffix, LightLaneModels._arrow(side, LightLaneTuning.STALKER_ARROW_SIZE));
         }
+        // The enemies (gameplay § 6) and the Sentinel's shapes and shots (§ 7).
+        LightLaneModels._load(LightLaneModels.PROWLER, LightLaneModels._enemy(0, false));
+        for (const [suffix, side] of LightLaneModels.ARROW_SIDES) {
+            LightLaneModels._load(LightLaneModels.STALKER + suffix, LightLaneModels._enemy(side, false));
+            LightLaneModels._load(LightLaneModels.STALKER + suffix + LightLaneModels.WARN, LightLaneModels._enemy(side, true));
+        }
+        LightLaneModels._load(LightLaneModels.SENTINEL, LightLaneModels._sentinel(color.WARN));
+        LightLaneModels._load(LightLaneModels.SENTINEL_STRIKE, LightLaneModels._sentinel(color.LETHAL));
+        LightLaneTuning.STRIKE_WIDTHS.forEach((width, i) => {
+            LightLaneModels._load(LightLaneModels.STRIKE_MARK + (i + 1), LightLaneModels._strikeMark(width));
+        });
+        LightLaneModels._load(LightLaneModels.STRIKE_BEAM, LightLaneModels._strikeBeam());
+        LightLaneTuning.SWEEP_WIDTH.forEach((width, i) => {
+            for (const height of Object.keys(LightLaneTuning.SWEEP_DRAWN)) {
+                LightLaneModels._load(LightLaneModels.sweepCode(true, i, height), LightLaneModels._sweepFrame(width, LightLaneTuning.SWEEP_DRAWN[height]));
+                LightLaneModels._load(LightLaneModels.sweepCode(false, i, height), LightLaneModels._sweepRay(width, LightLaneTuning.SWEEP_DRAWN[height]));
+            }
+        });
         // The obstacles: one size of lines at any distance (user request: no sudden change as they come near; the
         // bloom's halo keeps them visible far away).
         const line = LightLaneTuning.LINE_SIZE;
@@ -180,10 +199,21 @@ class LightLaneModels {
     }
 
     /**
-     * @param {LightLaneEntity} entity - an obstacle
-     * @returns {string|null} the code of its object, null for a gap (drawn as its holed tile)
+     * @param {boolean} warning - the frame that announces it, else the ray
+     * @param {int}     wide    - 0: 3 lanes, 1: 5 lanes
+     * @param {string}  height  - 'low' or 'high' (SWEEP_DRAWN key)
+     * @returns {string} the code of a sweep's object
      */
-    static obstacleCode(entity) {
+    static sweepCode(warning, wide, height) {
+        return (((warning) ? LightLaneModels.SWEEP_WARN : LightLaneModels.SWEEP) + LightLaneModels.SWEEP_LANES[wide] + height);
+    }
+
+    /**
+     * @param {LightLaneEntity} entity - an obstacle
+     * @param {boolean}         blink  - the warnings' blink is on (a stalker announcing its move)
+     * @returns {string|null} the code of its object, null for a gap (drawn as its holed tile) or a bonus (step 12)
+     */
+    static obstacleCode(entity, blink = true) {
         switch (entity.getKind()) {
             case LightLaneEntity.HURDLE:
                 return LightLaneModels.HURDLE;
@@ -193,6 +223,12 @@ class LightLaneModels {
                 return LightLaneModels.blockCode(entity.getCode());
             case LightLaneEntity.COIN:
                 return LightLaneModels.COIN;
+            case LightLaneEntity.PROWLER:
+                return LightLaneModels.PROWLER;
+            case LightLaneEntity.STALKER: {
+                const suffix = (((entity.getToLane() < entity.getLane()) ? LightLaneModels.ARROW_SIDES[0][0] : LightLaneModels.ARROW_SIDES[1][0]));
+                return (LightLaneModels.STALKER + suffix + ((entity.isWarning() && blink) ? LightLaneModels.WARN : ''));
+            }
             default:
                 return null;
         }
@@ -462,10 +498,10 @@ class LightLaneModels {
         return b.data();
     }
 
-    // An amber chevron on the floor (art § 5.2 arrow, ARROW_SIZE [across, along]), its tip towards side (−1 left, +1
-    // right): the way back to the middle lanes at the start of a warning zone.
-    static _arrow(side) {
-        const [across, along] = LightLaneTuning.ARROW_SIZE;
+    // An amber chevron on the floor (art § 5.2 arrow, `size` [across, along]), its tip towards side (−1 left, +1 right):
+    // the way back to the middle lanes at the start of a warning zone, a stalker's lane of destination.
+    static _arrow(side, size) {
+        const [across, along] = size;
         const y    = (LightLaneTuning.TILE_THICKNESS + LightLaneTuning.FLOOR_LIFT);
         const tip  = [(side * across / 2), y, 0];
         const b    = new LightLaneObjectBuilder();
@@ -548,6 +584,208 @@ class LightLaneModels {
         };
     }
 
+    // An enemy (art § 5.2, user decision: the language of a light cycle, an original design), origin at the centre of its
+    // bottom, its front towards −z: a two-wheeler of a real motorbike's size, its wheels without hub (a tyre whose
+    // sides glow DANGER), a rounded black shell from nose to tail over them, a DANGER line all along its top and along
+    // each flank, a WARN head light. A stalker (side −1 / +1, the way it will go) has 3 chevrons on its tail pointing
+    // there; with `warning`, they and the flank line on that side turn WARN.
+    static _enemy(side, warning) {
+        const color = LightLaneTuning.COLOR;
+        const shape = LightLaneTuning.ENEMY_SHAPE;
+        const line  = LightLaneTuning.LINE_SIZE;
+        const b     = new LightLaneObjectBuilder();
+        for (const z of shape.wheelZ) {
+            LightLaneModels._wheel(b, z);
+        }
+        const rings = shape.stations.map((station) => LightLaneModels._section(station));
+        for (let i = 1; i < rings.length; i++) {
+            const [za, ya] = shape.stations[i - 1];
+            const [zb, yb] = shape.stations[i];
+            const inside   = [0, ((ya + yb) / 2), ((za + zb) / 2)];
+            for (let k = 0; k < shape.section; k++) {
+                const n    = ((k + 1) % shape.section);
+                const quad = [rings[i - 1][k], rings[i - 1][n], rings[i][n], rings[i][k]];
+                b.facing(quad, inside, LightLaneModels._shellColor(k, shape.section));
+            }
+        }
+        // The nose cap, seen as it comes.
+        const [noseZ, noseY] = shape.stations[0];
+        b.facing(rings[0], [0, noseY, (noseZ + 1)], color.ENEMY_SIDE);
+        // Its lines: the top's from nose to tail, each flank's (WARN on a warning stalker's side).
+        const top   = (shape.section / 4);
+        const flank = [[1, 0], [-1, (shape.section / 2)]];
+        for (let i = 1; i < rings.length; i++) {
+            b.bar(rings[i - 1][top], rings[i][top], line, color.DANGER, [0, 1, 0]);
+            for (const [sx, k] of flank) {
+                const rgb = (((side !== 0) && (sx === side) && warning) ? color.WARN : color.DANGER);
+                b.bar(rings[i - 1][k], rings[i][k], line, rgb, [sx, 0, 0]);
+            }
+        }
+        const [lightWidth, lightHeight] = shape.light;
+        b.rect((-lightWidth / 2), (noseY - (lightHeight / 2)), (lightWidth / 2), (noseY + (lightHeight / 2)), (noseZ - LightLaneTuning.LINE_OUTSET), color.WARN, true);
+        if (side !== 0) {
+            LightLaneModels._chevrons(b, side, warning);
+        }
+
+        return b.data();
+    }
+
+    // A rounded section of the shell at a station [z, centre y, half width, half height]: SECTION points, the first on the
+    // right flank, a quarter round on the top.
+    static _section([z, y, halfWidth, halfHeight]) {
+        const n      = LightLaneTuning.ENEMY_SHAPE.section;
+        const points = [];
+        for (let k = 0; k < n; k++) {
+            const angle = ((2 * Math.PI * k) / n);
+            const c     = Math.cos(angle);
+            const s     = Math.sin(angle);
+            // A squarer round than an ellipse: |cos|^ROUND, |sin|^ROUND.
+            points.push([(Math.sign(c) * halfWidth * Math.pow(Math.abs(c), LightLaneModels.ROUND)), (y + (Math.sign(s) * halfHeight * Math.pow(Math.abs(s), LightLaneModels.ROUND))), z]);
+        }
+
+        return points;
+    }
+
+    // The shell's colour between points k and k + 1 of a section: its top lighter, its flanks darker, its bottom darkest.
+    static _shellColor(k, n) {
+        const middle = Math.sin((2 * Math.PI * (k + 0.5)) / n);
+        if (middle > LightLaneModels.FACING_UP) {
+            return LightLaneTuning.COLOR.ENEMY_TOP;
+        }
+
+        return ((middle < -LightLaneModels.FACING_UP) ? LightLaneTuning.COLOR.ENEMY_BOTTOM : LightLaneTuning.COLOR.ENEMY_SIDE);
+    }
+
+    // A wheel without hub at z: its tyre (outer and inner faces dark, both sides glowing DANGER), on the ground.
+    static _wheel(b, z) {
+        const shape  = LightLaneTuning.ENEMY_SHAPE;
+        const outer  = shape.radius;
+        const inner  = (shape.radius - shape.tyre);
+        const x      = shape.halfThick;
+        const centre = [0, outer, z];
+        const at     = (radius, angle, side) => [(side * x), (outer + (radius * Math.sin(angle))), (z + (radius * Math.cos(angle)))];
+        for (let k = 0; k < shape.segments; k++) {
+            const a0 = ((2 * Math.PI * k) / shape.segments);
+            const a1 = ((2 * Math.PI * (k + 1)) / shape.segments);
+            const am = ((a0 + a1) / 2);
+            b.facing([at(outer, a0, -1), at(outer, a1, -1), at(outer, a1, 1), at(outer, a0, 1)], centre, LightLaneTuning.COLOR.BODY_SIDE);
+            // The tunnel's inside faces the axis.
+            const away = [0, (outer + (2 * outer * Math.sin(am))), (z + (2 * outer * Math.cos(am)))];
+            b.facing([at(inner, a0, -1), at(inner, a1, -1), at(inner, a1, 1), at(inner, a0, 1)], away, LightLaneTuning.COLOR.BODY_BOTTOM);
+            for (const side of [-1, 1]) {
+                b.facing([at(inner, a0, side), at(outer, a0, side), at(outer, a1, side), at(inner, a1, side)], centre, LightLaneTuning.COLOR.DANGER, true);
+            }
+        }
+    }
+
+    // A stalker's 3 chevrons on its tail, pointing the way it will go (WARN while it announces it).
+    static _chevrons(b, side, warning) {
+        const shape  = LightLaneTuning.ENEMY_SHAPE;
+        const line   = LightLaneTuning.LINE_SIZE;
+        const [across, along] = shape.chevron;
+        const tail   = shape.stations[shape.stations.length - 2];
+        const roof   = (tail[1] + tail[3] + LightLaneTuning.LINE_OUTSET + (line / 2));
+        const rgb    = ((warning) ? LightLaneTuning.COLOR.WARN : LightLaneTuning.COLOR.DANGER);
+        for (let k = 0; k < shape.chevrons; k++) {
+            const z   = (tail[0] - (k * along * 2));
+            const tip = [(side * across / 2), roof, z];
+            b.bar([(-side * across / 2), roof, (z - (along / 2))], tip, line, rgb, [0, 1, 0]);
+            b.bar([(-side * across / 2), roof, (z + (along / 2))], tip, line, rgb, [0, 1, 0]);
+        }
+    }
+
+    // The Sentinel (art § 5.2), origin at the centre of its wing: a flat swept wing (SENTINEL_SHAPE.wing, nose towards −z)
+    // outlined in DANGER, two fins under it, a slot at its front in `slot` (WARN, LETHAL while it strikes).
+    static _sentinel(slot) {
+        const color = LightLaneTuning.COLOR;
+        const shape = LightLaneTuning.SENTINEL_SHAPE;
+        const line  = LightLaneTuning.LINE_SIZE;
+        const half  = (shape.thick / 2);
+        const o     = (LightLaneTuning.LINE_OUTSET + (line / 2));
+        const b     = new LightLaneObjectBuilder();
+        b.prism(shape.wing, -half, half, {top: color.BODY_TOP, side: color.BODY_SIDE, bottom: color.BODY_BOTTOM});
+        const n = shape.wing.length;
+        for (let i = 0; i < n; i++) {
+            const [xa, za] = shape.wing[i];
+            const [xb, zb] = shape.wing[(i + 1) % n];
+            b.bar([xa, (half + o), za], [xb, (half + o), zb], line, color.DANGER, [0, 1, 0]);
+            b.bar([xa, (-half - o), za], [xb, (-half - o), zb], line, color.DANGER, [0, -1, 0]);
+        }
+        const [finWidth, finHeight, finDepth] = shape.fin.size;
+        for (const sx of [-1, 1]) {
+            const x = (sx * shape.fin.x);
+            b.box([(x - (finWidth / 2)), (-half - finHeight), (-finDepth / 2)], [(x + (finWidth / 2)), -half, (finDepth / 2)], {top: null, side: color.BODY_SIDE, bottom: color.BODY_BOTTOM});
+            b.bar([x, (-half - finHeight - o), (-finDepth / 2)], [x, (-half - finHeight - o), (finDepth / 2)], line, color.DANGER, [0, -1, 0]);
+            b.bar([x, -half, (-finDepth / 2 - o)], [x, (-half - finHeight), (-finDepth / 2 - o)], line, color.DANGER, [0, 0, -1]);
+        }
+        const [slotWidth, slotHeight] = shape.slot;
+        const front = Math.min(...shape.wing.map(([, z]) => z));
+        b.rect((-slotWidth / 2), (-slotHeight / 2), (slotWidth / 2), (slotHeight / 2), (front - LightLaneTuning.LINE_OUTSET), slot, true);
+
+        return b.data();
+    }
+
+    // A strike's mark on the floor (art § 5.2): `width` across, from 0 to its length along, LETHAL, see-through, glowing.
+    static _strikeMark(width) {
+        const y      = (LightLaneTuning.TILE_THICKNESS + LightLaneTuning.FLOOR_LIFT);
+        const length = (LightLaneTuning.STRIKE_MARK[0] + LightLaneTuning.STRIKE_MARK[1]);
+        const w      = (width / 2);
+        const b      = new LightLaneObjectBuilder();
+        b.polygon([[-w, y, 0], [-w, y, length], [w, y, length], [w, y, 0]], [...LightLaneTuning.COLOR.LETHAL, LightLaneTuning.STRIKE_MARK_ALPHA], true);
+
+        return b.data();
+    }
+
+    // A strike's column (STRIKE_BEAM [width, height, length]), from the floor, from 0 along: LETHAL, additive, glowing.
+    static _strikeBeam() {
+        const [width, height, length] = LightLaneTuning.STRIKE_BEAM;
+        const w      = (width / 2);
+        const y      = LightLaneTuning.TILE_THICKNESS;
+        const inside = [0, (y + (height / 2)), (length / 2)];
+        const rgb    = LightLaneTuning.COLOR.LETHAL;
+        const b      = new LightLaneObjectBuilder();
+        b.facing([[-w, (y + height), 0], [w, (y + height), 0], [w, (y + height), length], [-w, (y + height), length]], inside, rgb, true, true);
+        b.facing([[-w, y, 0], [w, y, 0], [w, (y + height), 0], [-w, (y + height), 0]], inside, rgb, true, true);
+        for (const x of [-w, w]) {
+            b.facing([[x, y, 0], [x, (y + height), 0], [x, (y + height), length], [x, y, length]], inside, rgb, true, true);
+        }
+
+        return b.data();
+    }
+
+    // A sweep's warning frame (art § 5.2): WARN lines around `width` × [y0, y1], in the plane z = 0.
+    static _sweepFrame(width, [y0, y1]) {
+        const w    = (width / 2);
+        const h    = LightLaneTuning.TILE_THICKNESS;
+        const line = LightLaneTuning.LINE_SIZE;
+        const rgb  = LightLaneTuning.COLOR.WARN;
+        const b    = new LightLaneObjectBuilder();
+        b.bar([-w, (h + y0), 0], [w, (h + y0), 0], line, rgb, [0, 0, -1]);
+        b.bar([-w, (h + y1), 0], [w, (h + y1), 0], line, rgb, [0, 0, -1]);
+        b.bar([-w, (h + y0), 0], [-w, (h + y1), 0], line, rgb, [0, 0, -1]);
+        b.bar([w, (h + y0), 0], [w, (h + y1), 0], line, rgb, [0, 0, -1]);
+
+        return b.data();
+    }
+
+    // A sweep's ray (art § 5.2): a sheet `width` × [y0, y1], SWEEP_THICK deep, DANGER, see-through and additive; its top
+    // and bottom edges in glowing DANGER lines.
+    static _sweepRay(width, [y0, y1]) {
+        const w      = (width / 2);
+        const h      = LightLaneTuning.TILE_THICKNESS;
+        const d      = (LightLaneTuning.SWEEP_THICK / 2);
+        const rgb    = LightLaneTuning.COLOR.DANGER;
+        const sheet  = [...rgb, LightLaneTuning.SWEEP_ALPHA];
+        const inside = [0, (h + ((y0 + y1) / 2)), 0];
+        const b      = new LightLaneObjectBuilder();
+        b.facing([[-w, (h + y0), -d], [w, (h + y0), -d], [w, (h + y1), -d], [-w, (h + y1), -d]], inside, sheet, true, true);
+        b.facing([[-w, (h + y1), -d], [w, (h + y1), -d], [w, (h + y1), d], [-w, (h + y1), d]], inside, sheet, true, true);
+        b.bar([-w, (h + y0), -d], [w, (h + y0), -d], LightLaneTuning.LINE_SIZE, rgb, [0, -1, -1]);
+        b.bar([-w, (h + y1), -d], [w, (h + y1), -d], LightLaneTuning.LINE_SIZE, rgb, [0, 1, -1]);
+
+        return b.data();
+    }
+
     // The line along the right edge of the rightmost lane, alone.
     // The track's right edge line along a tile; cut at the hole of a gap in the rightmost lane (no rail over the void).
     static _tileEdge(lineSize, gap) {
@@ -587,6 +825,26 @@ LightLaneModels.WARN_EDGES = 'warnEdges';
 LightLaneModels.ARROW      = 'arrow';
 // The chevrons by the way they point: [suffix, side].
 LightLaneModels.ARROW_SIDES = Object.freeze([['L', -1], ['R', 1]]);
+LightLaneModels.STALKER_ARROW = 'stalkerArrow';
+LightLaneModels.PROWLER    = 'prowler';
+// A stalker by the way it goes (ARROW_SIDES suffix), and WARN while it announces it.
+LightLaneModels.STALKER    = 'stalker';
+LightLaneModels.WARN       = 'Warn';
+LightLaneModels.SENTINEL   = 'sentinel';
+LightLaneModels.SENTINEL_STRIKE = 'sentinelStrike';
+// A strike's mark, by its width step (1 to STRIKE_WIDTHS.length), and its column.
+LightLaneModels.STRIKE_MARK = 'strikeMark';
+LightLaneModels.STRIKE_BEAM = 'strikeBeam';
+// A sweep: its warning frame and its ray, by lanes (3, 5) and height.
+LightLaneModels.SWEEP_WARN = 'sweepWarn';
+LightLaneModels.SWEEP      = 'sweep';
+LightLaneModels.SWEEP_LANES = Object.freeze(['3', '5']);
+// Degrees to radians.
+LightLaneModels.HALF_TURN  = 180;
+// The enemies' shell: the roundness of its sections (1 an ellipse, lower squarer) and the sine above which a face
+// counts as a top (or below its negative, a bottom).
+LightLaneModels.ROUND      = 0.6;
+LightLaneModels.FACING_UP  = 0.5;
 // Lengths closer than this are equal (m): a hole's side wall shorter is not built, a floor mark is found at its z.
 LightLaneModels.EPSILON    = 0.01;
 LightLaneModels.TILE_EDGE  = 'tileEdge';

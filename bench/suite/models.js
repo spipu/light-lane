@@ -31,6 +31,11 @@ const RUNNER_CLIPS     = {idle: null, run: null, jump: 0.75, slide: 0.70, stumbl
 const RUNNER_TRIANGLES = 3000;
 const DURATION_EPSILON = 1e-6;
 
+// The objects built in code and what they read (art § 5.1 budgets: an enemy 800 triangles, the Sentinel 1 500).
+const BUILT_SOURCES      = ['js/lightLane/lightLaneTuning.js', 'js/lightLane/game/lightLaneObjectBuilder.js', 'js/lightLane/game/lightLaneEntity.js', 'js/lightLane/game/lightLaneModels.js'];
+const ENEMY_TRIANGLES    = 800;
+const SENTINEL_TRIANGLES = 1500;
+
 class ModelsBench {
     constructor() {
         this._failures = 0;
@@ -74,8 +79,30 @@ class ModelsBench {
         this._check('runner: the line material glows', ((line !== undefined) && (line.extras.glow === true)));
         const suit  = named('suit');
         this._check('runner: the suit material does not glow', ((suit !== undefined) && (suit.extras.glow !== true)));
+        this._builtModels();
 
         return this._failures;
+    }
+
+    // The objects built in code (LightLaneModels): the enemies and the Sentinel within their budgets (art § 5.1), every
+    // face a triangle, glowing faces present.
+    _builtModels() {
+        const ctx = vm.createContext({console, Math, Object, Array, Map, Set, Error, Number, String});
+        for (const file of BUILT_SOURCES) {
+            vm.runInContext(fs.readFileSync(path.join(WEBSITE_DIR, file), 'utf8'), ctx, {filename: file});
+        }
+        const built = vm.runInContext('({models: LightLaneModels, tuning: LightLaneTuning})', ctx);
+        const cases = [
+            ['prowler', built.models._enemy(0, false), ENEMY_TRIANGLES],
+            ['stalker', built.models._enemy(-1, false), ENEMY_TRIANGLES],
+            ['stalker warning', built.models._enemy(1, true), ENEMY_TRIANGLES],
+            ['Sentinel', built.models._sentinel(built.tuning.COLOR.WARN), SENTINEL_TRIANGLES],
+        ];
+        for (const [name, data, budget] of cases) {
+            const triangles = data.faces.length;
+            const ok        = ((triangles <= budget) && data.faces.every((face) => (face.pts.length === 3)) && data.faces.some((face) => (face.glow === true)));
+            this._check(name + ': ' + triangles + ' triangles, budget ' + budget + ', glowing lines', ok);
+        }
     }
 
     _check(label, ok) {

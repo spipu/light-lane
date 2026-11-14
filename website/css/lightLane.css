@@ -490,7 +490,9 @@
     color: #E2F6FA;
 }
 
-/* Top right (user request): score 64 px, BEST 26 px and the time played under it, at the HUD margin. */
+/* Top right (user request): the score 64 px; under it the run's line (distance, coins, time) 26 px, then the
+   record's line (BEST, its score, distance, coins, time) 22 px in the aid colour, dimmer, in the same columns; a value
+   of the run past the record's lights up. */
 .light-lane-hud-score-block {
     position: absolute;
     top: 2.5cqh;
@@ -498,6 +500,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+    gap: 0.4cqh;
     line-height: 1.1;
     text-shadow: 0 0 0.4em rgba(120, 214, 232, 0.55);
 }
@@ -506,21 +509,66 @@
     font-size: 5.93cqh;
     font-weight: 500;
     letter-spacing: 0.04em;
+    transition: color 0.3s;
+}
+
+/* The run's line over the record's, one grid: distance, coins and time aligned in columns (user request). */
+.light-lane-hud-stats {
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+    column-gap: 0.9em;
+    row-gap: 0.4cqh;
+    justify-items: end;
+    align-items: center;
+    letter-spacing: 0.08em;
+    font-variant-numeric: tabular-nums;
+}
+
+.light-lane-hud-run {
+    font-size: 2.41cqh;
+    color: #E2F6FA;
+}
+
+/* The record's line: a thin rule above it, in the aid colour, dimmer. */
+.light-lane-hud-rule {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    border-top: 0.15cqh solid rgba(120, 214, 232, 0.35);
 }
 
 .light-lane-hud-best {
-    display: flex;
-    gap: 0.5em;
-    font-size: 2.41cqh;
-    letter-spacing: 0.12em;
+    font-size: 2.04cqh;
     color: #78D6E8;
+    opacity: 0.85;
+}
+
+.light-lane-hud-best-label {
+    letter-spacing: 0.16em;
+}
+
+.light-lane-hud-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    transition: color 0.3s, text-shadow 0.3s;
+}
+
+.light-lane-hud-icon svg {
+    display: block;
+    width: 0.6em;
+    height: 0.84em;
+    fill: currentColor;
 }
 
 .light-lane-hud-time {
-    font-size: 2.41cqh;
-    letter-spacing: 0.12em;
     color: #9FB3BA;
-    font-variant-numeric: tabular-nums;
+}
+
+/* Past the record. */
+.light-lane-hud-beaten,
+.light-lane-hud-stat:has(> .light-lane-hud-beaten) {
+    color: #78D6E8;
+    text-shadow: 0 0 0.5em rgba(120, 214, 232, 0.9);
 }
 
 /* 3, 2, 1, GO in 220 px; the HUD sets the zoom and the fade. */

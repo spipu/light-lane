@@ -9,11 +9,14 @@
  *   placements (pattern, mirror, offset) the tier's catalogue allows, without the last ones, with the new tier's
  *   introduction factor; each draw passes the fairness check (LightLaneOccupancy, § 8) or is drawn again, ROW_TRIES
  *   times at most, then the row is left empty. A gap starts at its tile's start + holeFrom (§ 4.6).
+ * - Enemies (§ 5): laid by their meeting point; their lanes reserved from ENEMY_RESERVE around it.
+ * - The Sentinel's passes (§ 7.2), planned by distance before the sections: the track bridled while it is there (its
+ *   patterns only, longer gaps), no section ending inside.
  * - First encounters (§ 6), bonuses (§ 7.1, flight excluded until plan step 12), scenery zones (§ 7.3).
  * - Coins (§ 9): the pattern's own, else a line with COIN_LINE_CHANCE on the clear lane most starts reach.
  *
  * The test mode's imposed rows come in order without the draw nor the check, then empty rows; lockTier (bench only)
- * fixes the tier, its speed and its catalogue and cuts the first encounters (§ 8.3). Enemies come with plan step 11.
+ * fixes the tier, its speed and its catalogue and cuts the first encounters (§ 8.3).
  */
 class LightLaneTrackGenerator {
     constructor() {
@@ -33,9 +36,13 @@ class LightLaneTrackGenerator {
         this._lastRowZ    = 0;       // front of the last row (the fairness window starts there)
         this._recent      = [];      // Ids of the last rows
         this._encounters  = [];      // the first encounters still to come: {z, pattern, bonus}, in order
+        this._spareEncounters = [];
         this._nextBonusZ  = Infinity;
         this._lastBonus   = null;
         this._zones       = [];      // scenery zone of each ZONE_LENGTH from the start
+        this._sentinels   = [];      // the Sentinel's passes: {z, end, started}, in order
+        this._spareSentinels = [];
+        this._nextSentinelZ  = Infinity;
         // The draw's placements, reused: {pattern, mirror, offset, z, weight}.
         this._placements  = Array.from({length: LightLaneTrackGenerator.PLACEMENTS_MAX}, () => ({pattern: null, mirror: false, offset: 0, z: 0, weight: 0}));
         this._placementCount = 0;
@@ -58,6 +65,9 @@ class LightLaneTrackGenerator {
         while (this._sections.length > 0) {
             this._spareSections.push(this._sections.pop());
         }
+        while (this._sentinels.length > 0) {
+            this._spareSentinels.push(this._sentinels.pop());
+        }
         this._start         = start;
         this._nextRowZ      = (start + LightLaneTuning.FIRST_ROW);
         this._lastRowZ      = start;
@@ -68,6 +78,66 @@ class LightLaneTrackGenerator {
         this._planEvents();
 
         return this;
+    }
+
+    /**
+     * @param {LightLaneTrackGenerator} other
+     * @returns {LightLaneTrackGenerator} this, in the state of other (the robot's copies of the simulation): its
+     *          entities, sections, passes and random sources copied into this one's pools
+     */
+    copyFrom(other) {
+        this._random.copyFrom(other._random);
+        this._zoneRandom.copyFrom(other._zoneRandom);
+        while (this._active.length > 0) {
+            this._pool.push(this._active.pop().reset());
+        }
+        for (const entity of other._active) {
+            const copy = ((this._pool.length > 0) ? this._pool.pop() : new LightLaneEntity());
+            this._active.push(copy.copyFrom(entity));
+        }
+        this._serial        = other._serial;
+        this._start         = other._start;
+        this._locked        = other._locked;
+        this._fiveForced    = other._fiveForced;
+        this._nextRowZ      = other._nextRowZ;
+        this._lastRowZ      = other._lastRowZ;
+        this._nextBonusZ    = other._nextBonusZ;
+        this._lastBonus     = other._lastBonus;
+        this._nextSentinelZ = other._nextSentinelZ;
+        LightLaneTrackGenerator._copyList(this._recent, other._recent);
+        LightLaneTrackGenerator._copyList(this._zones, other._zones);
+        if (other._imposed === null) {
+            this._imposed = null;
+        } else {
+            this._imposed = (this._imposed ?? []);
+            LightLaneTrackGenerator._copyList(this._imposed, other._imposed);
+        }
+        LightLaneTrackGenerator._copyRecords(this._sections, this._spareSections, other._sections);
+        LightLaneTrackGenerator._copyRecords(this._sentinels, this._spareSentinels, other._sentinels);
+        LightLaneTrackGenerator._copyRecords(this._encounters, this._spareEncounters, other._encounters);
+
+        return this;
+    }
+
+    static _copyList(out, list) {
+        out.length = 0;
+        for (const item of list) {
+            out.push(item);
+        }
+    }
+
+    // Plain records (sections, passes, encounters) copied field by field into pooled ones.
+    static _copyRecords(out, spare, list) {
+        while (out.length > 0) {
+            spare.push(out.pop());
+        }
+        for (const record of list) {
+            const copy = ((spare.length > 0) ? spare.pop() : {});
+            for (const key in record) {
+                copy[key] = record[key];
+            }
+            out.push(copy);
+        }
     }
 
     /**
@@ -107,6 +177,40 @@ class LightLaneTrackGenerator {
         while ((this._sections.length > 1) && (this._sections[0].to < (behind - LightLaneTuning.TILE_LENGTH))) {
             this._spareSections.push(this._sections.shift());
         }
+        while ((this._sentinels.length > 0) && this._sentinels[0].started && (this._sentinels[0].end < behind)) {
+            this._spareSentinels.push(this._sentinels.shift());
+        }
+    }
+
+    /**
+     * The simulation's question each step: a pass of the Sentinel starts here.
+     *
+     * @param {number} z - the runner's z
+     * @returns {boolean} true once for each pass, when the runner reaches its z
+     */
+    takeSentinel(z) {
+        for (const sentinel of this._sentinels) {
+            if (!sentinel.started && (sentinel.z <= z)) {
+                sentinel.started = true;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param {number} z
+     * @returns {boolean} the track is bridled for a pass of the Sentinel there (§ 7.2)
+     */
+    isBridled(z) {
+        for (const sentinel of this._sentinels) {
+            if ((z >= sentinel.z) && (z < sentinel.end)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -234,7 +338,16 @@ class LightLaneTrackGenerator {
         const unlocked         = (this._locked === null);
         const fiveAt           = (LightLaneDifficulty.tierStart(LightLaneTuning.FIVE_TIER) + LightLaneTuning.FIVE_FIRST_AFTER);
         this._fiveForced       = ((unlocked && (start < fiveAt)) ? fiveAt : null);
-        this._encounters.length = 0;
+        while (this._encounters.length > 0) {
+            this._spareEncounters.push(this._encounters.pop());
+        }
+        const sentinelAt       = (LightLaneDifficulty.tierStart(LightLaneTuning.SENTINEL_TIER) + LightLaneTuning.SENTINEL_FIRST_AFTER);
+        const startTier        = this._tierAt(start);
+        if (unlocked && (start < sentinelAt)) {
+            this._nextSentinelZ = sentinelAt;
+        } else {
+            this._nextSentinelZ = ((startTier >= LightLaneTuning.SENTINEL_TIER) ? (start + LightLaneTuning.SENTINEL_FIRST_AFTER) : Infinity);
+        }
         if (!unlocked) {
             this._nextBonusZ = ((this._locked >= LightLaneTuning.BONUS_FIRST_TIER) ? (start + this._bonusStep(this._locked)) : Infinity);
             return;
@@ -243,11 +356,11 @@ class LightLaneTrackGenerator {
         for (const encounter of LightLaneTuning.ENCOUNTERS) {
             const z = (LightLaneDifficulty.tierStart(encounter.tier) + LightLaneTuning.ENCOUNTER_AFTER);
             if (z > start) {
-                this._encounters.push({z: z, pattern: LightLanePatterns.get(encounter.pattern), bonus: null});
+                this._encounters.push(this._encounter(z, LightLanePatterns.get(encounter.pattern), null));
             }
         }
         if (firstBonus > start) {
-            this._encounters.push({z: firstBonus, pattern: LightLanePatterns.get(LightLaneTrackGenerator.EMPTY), bonus: LightLaneTuning.BONUS_FIRST_TYPE});
+            this._encounters.push(this._encounter(firstBonus, LightLanePatterns.get(LightLaneTrackGenerator.EMPTY), LightLaneTuning.BONUS_FIRST_TYPE));
             this._encounters.sort((a, b) => (a.z - b.z));
             this._nextBonusZ = Infinity;
             return;
@@ -255,6 +368,15 @@ class LightLaneTrackGenerator {
         this._encounters.sort((a, b) => (a.z - b.z));
         const tier       = LightLaneDifficulty.tierAt(start);
         this._nextBonusZ = ((tier >= LightLaneTuning.BONUS_FIRST_TIER) ? (start + this._bonusStep(tier)) : (firstBonus + this._bonusStep(LightLaneTuning.BONUS_FIRST_TIER)));
+    }
+
+    _encounter(z, pattern, bonus) {
+        const encounter   = ((this._spareEncounters.length > 0) ? this._spareEncounters.pop() : {});
+        encounter.z       = z;
+        encounter.pattern = pattern;
+        encounter.bonus   = bonus;
+
+        return encounter;
     }
 
     _bonusStep(tier) {
@@ -266,6 +388,36 @@ class LightLaneTrackGenerator {
         }
 
         return this._random.between(range.min, range.max);
+    }
+
+    // --- The Sentinel's passes (§ 7.2) ---
+
+    // Planned at least until z: each pass bridles the track over SENTINEL_BRIDLE × the target speed from its z.
+    _planSentinels(z) {
+        while (this._nextSentinelZ <= z) {
+            const at       = this._nextSentinelZ;
+            const sentinel = ((this._spareSentinels.length > 0) ? this._spareSentinels.pop() : {});
+            sentinel.z       = at;
+            sentinel.end     = (at + (LightLaneTuning.SENTINEL_BRIDLE * this._speedAt(at)));
+            sentinel.started = false;
+            this._sentinels.push(sentinel);
+            this._nextSentinelZ = (at + this._random.between(LightLaneTuning.SENTINEL_EVERY[0], LightLaneTuning.SENTINEL_EVERY[1]));
+        }
+    }
+
+    // A section's end that would fall in a bridled stretch is put off past it (§ 7.2).
+    _pastBridles(to) {
+        const tile = LightLaneTuning.SECTION_STEP;
+        let end    = to;
+        this._planSentinels(end + LightLaneTrackGenerator.SECTIONS_AHEAD);
+        for (const sentinel of this._sentinels) {
+            if ((end >= sentinel.z) && (end <= sentinel.end)) {
+                end = (Math.ceil(sentinel.end / tile) * tile);
+                this._planSentinels(end + LightLaneTrackGenerator.SECTIONS_AHEAD);
+            }
+        }
+
+        return end;
     }
 
     // --- Sections (§ 3) ---
@@ -309,6 +461,7 @@ class LightLaneTrackGenerator {
                 section.to = this._fiveForced;
             }
         }
+        section.to = this._pastBridles(section.to);
         const speed       = this._speedAt(section.to);
         const tile        = LightLaneTuning.TILE_LENGTH;
         section.warnFrom  = Math.max(section.from, (Math.floor((section.to - (LightLaneTuning.WARN_TIME * speed)) / tile) * tile));
@@ -326,7 +479,8 @@ class LightLaneTrackGenerator {
         const tier  = this._tierAt(rowZ);
         const speed = this._speedAt(rowZ);
         const base  = LightLaneTuning.ROW_GAPS[Math.min(tier, (LightLaneTuning.ROW_GAPS.length - 1))];
-        let gap     = LightLaneTrackGenerator._snap((base + this._random.between(0, LightLaneTuning.ROW_GAP_JITTER)) * speed);
+        const calm  = ((this._imposed === null) && this.isBridled(rowZ));
+        let gap     = LightLaneTrackGenerator._snap((base + this._random.between(0, LightLaneTuning.ROW_GAP_JITTER)) * speed * ((calm) ? LightLaneTuning.SENTINEL_GAP : 1));
         let z       = rowZ;
         let pattern = null;
         let bonus   = null;
@@ -343,6 +497,7 @@ class LightLaneTrackGenerator {
                 pattern = encounter.pattern;
                 bonus   = encounter.bonus;
                 met     = true;
+                this._spareEncounters.push(encounter);
             } else {
                 // Refused (a placement or the check): the row stays empty, the encounter moves to the next row.
                 encounter.z = (z + 1);
@@ -368,7 +523,7 @@ class LightLaneTrackGenerator {
         this._nextRowZ = (z + gap);
         if (pattern === null) {
             // An empty row: a line of coins on lane 0 (the test mode's rows after its written ones: nothing).
-            if (this._imposed === null) {
+            if ((this._imposed === null) && !this._reserved(0, z, this._nextRowZ)) {
                 this._line(0, z, this._nextRowZ);
             }
             return;
@@ -424,11 +579,15 @@ class LightLaneTrackGenerator {
         const five      = ((section !== null) && (section.lanes === LightLaneTuning.LANES_5.length));
         const calm      = ((section !== null) && (section.first || (five && (z >= section.warnFrom))));
         const catalogue = ((calm) ? 0 : this._catalogueTier(z, realTier));
+        const bridled   = this.isBridled(z);
         const offsets   = ((five && !calm) ? LightLaneTrackGenerator.OFFSETS_5 : LightLaneTrackGenerator.OFFSETS_3);
         const window    = this._recentWindow(catalogue, five);
         let count       = 0;
         for (const pattern of LightLanePatterns.TABLE) {
-            if ((pattern.weight <= 0) || (pattern.tier > catalogue) || pattern.enemy || this._isRecent(pattern.id, window)) {
+            if ((pattern.weight <= 0) || (pattern.tier > catalogue) || this._isRecent(pattern.id, window)) {
+                continue;
+            }
+            if (bridled && !LightLaneTuning.SENTINEL_PATTERNS.includes(pattern.id)) {
                 continue;
             }
             const wide = (pattern.lanes.length === LightLaneTuning.LANES_5.length);
@@ -443,7 +602,8 @@ class LightLaneTrackGenerator {
                     placement.mirror  = mirror;
                     placement.offset  = ((wide) ? 0 : offsets[o]);
                     this._setRow(pattern, placement.mirror, placement.offset, z);
-                    if (!this._fits(this._row, false)) {
+                    // Aligned for a gap, a row may move into a bridled stretch: its patterns only there.
+                    if (!this._fits(this._row, false) || (!bridled && this.isBridled(this._row.z) && !LightLaneTuning.SENTINEL_PATTERNS.includes(pattern.id))) {
                         continue;
                     }
                     placement.z = this._row.z;
@@ -482,7 +642,7 @@ class LightLaneTrackGenerator {
     _recentWindow(catalogue, five) {
         let candidates = 0;
         for (const pattern of LightLanePatterns.TABLE) {
-            if ((pattern.weight > 0) && (pattern.tier <= catalogue) && !pattern.enemy && (five || (pattern.lanes.length === LightLaneTuning.LANES_3.length))) {
+            if ((pattern.weight > 0) && (pattern.tier <= catalogue) && (five || (pattern.lanes.length === LightLaneTuning.LANES_3.length))) {
                 candidates++;
             }
         }
@@ -563,9 +723,65 @@ class LightLaneTrackGenerator {
             if (!encounter && !this._clearOfWarnings(lane, front, end)) {
                 return false;
             }
+            if (!this._clearOfReservations(row, i, lane, front, end)) {
+                return false;
+            }
         }
 
         return true;
+    }
+
+    /**
+     * An element clear of the enemies' reservations (§ 5): none of an enemy already laid covers its lane over its
+     * length; an enemy's own lanes (its lane, its destination) exist all along its reservation and hold nothing else
+     * (laid before, or of its row).
+     */
+    _clearOfReservations(row, i, lane, front, end) {
+        const [before, after] = LightLaneTuning.ENEMY_RESERVE;
+        for (const entity of this._active) {
+            if (!entity.isEnemy() || ((entity.getZ() + before) >= end) || ((entity.getZ() + after) <= front)) {
+                continue;
+            }
+            if ((entity.getLane() === lane) || (entity.getToLane() === lane)) {
+                return false;
+            }
+        }
+        const code = row.lanes[i];
+        if (!LightLanePatterns.isEnemy(code)) {
+            return true;
+        }
+        const to   = (lane + (LightLaneTuning.OBSTACLES[code].side ?? 0));
+        const from = (front + before);
+        const till = (front + after);
+        if (!this._laneSpans(lane, from, till) || !this._laneSpans(to, from, till)) {
+            return false;
+        }
+        for (const entity of this._active) {
+            const onLanes = ((entity.getLane() === lane) || (entity.getLane() === to));
+            if (entity.isObstacle() && onLanes && (entity.getZ() < till) && (entity.getEnd() > from)) {
+                return false;
+            }
+        }
+        for (let k = 0; k < row.lanes.length; k++) {
+            const other = this._laneOf(row, k);
+            if ((k !== i) && (row.lanes[k] !== '.') && ((other === lane) || (other === to))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // An enemy laid earlier reserves the lane over [from, to] (no coin nor bonus there).
+    _reserved(lane, from, to) {
+        const [before, after] = LightLaneTuning.ENEMY_RESERVE;
+        for (const entity of this._active) {
+            if (entity.isEnemy() && ((entity.getLane() === lane) || (entity.getToLane() === lane)) && ((entity.getZ() + before) < to) && ((entity.getZ() + after) > from)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // The lane exists all along [from, to].
@@ -654,8 +870,15 @@ class LightLaneTrackGenerator {
         }
     }
 
+    // An enemy blocks the lane where it meets the runner (a stalker: its destination; its lane of start is free) over
+    // ENEMY_BLOCKS around its meeting point (§ 8.1).
     static _markEntity(occupancy, code, lane, front) {
         const spec = LightLaneTuning.OBSTACLES[code];
+        if (LightLanePatterns.isEnemy(code)) {
+            const [from, to] = LightLaneTuning.ENEMY_BLOCKS;
+            occupancy.mark((lane + (spec.side ?? 0)), (front + from), (front + to), LightLaneOccupancy.BLOCKED);
+            return;
+        }
         occupancy.mark(lane, front, (front + spec.length), LightLaneTrackGenerator.CELL_STATE[spec.kind]);
     }
 
@@ -699,7 +922,7 @@ class LightLaneTrackGenerator {
     _placeBonus(row, type, z, nextZ) {
         const at = LightLaneTrackGenerator._snap((z + row.pattern.longest + nextZ) / 2);
         for (const lane of LightLaneTrackGenerator.CENTRE_FIRST_5) {
-            if (this._rowHolds(row, lane) || !this._laneSpans(lane, at, at) || !this._clearOfWarnings(lane, at, at)) {
+            if (this._rowHolds(row, lane) || !this._laneSpans(lane, at, at) || !this._clearOfWarnings(lane, at, at) || this._reserved(lane, at, at)) {
                 continue;
             }
             this._take().setBonus(type, lane, at);
@@ -734,7 +957,10 @@ class LightLaneTrackGenerator {
             return;
         }
         if (pattern.coins === 'line') {
-            this._line(this._laneOf(row, 1), (z + pattern.longest), nextZ);
+            const lane = this._laneOf(row, 1);
+            if (!this._reserved(lane, z, nextZ)) {
+                this._line(lane, (z + pattern.longest), nextZ);
+            }
             return;
         }
         if (pattern.coins === 'centre') {
@@ -753,7 +979,7 @@ class LightLaneTrackGenerator {
         let best   = null;
         let reach  = -1;
         for (const lane of LightLaneTrackGenerator.CENTRE_FIRST_5) {
-            if ((lane === bonusLane) || this._rowHolds(row, lane) || !this._laneSpans(lane, from, to) || !this._clearOfWarnings(lane, from, to) || this._blockedAlong(lane, from, to)) {
+            if ((lane === bonusLane) || this._rowHolds(row, lane) || !this._laneSpans(lane, from, to) || !this._clearOfWarnings(lane, from, to) || this._blockedAlong(lane, from, to) || this._reserved(lane, from, to)) {
                 continue;
             }
             const count = this._occupancy.getReach(lane);
@@ -770,7 +996,11 @@ class LightLaneTrackGenerator {
         for (const lane of LightLaneTrackGenerator.CENTRE_FIRST_5) {
             for (let i = 0; i < lanes.length; i++) {
                 if ((lanes[i] === 'P') && (this._laneOf(row, i) === lane)) {
-                    this._gateCoins(lane, z);
+                    const centre = (z + (LightLaneTuning.OBSTACLES.P.length / 2));
+                    const reach  = (((LightLaneTuning.COIN_GATE_COUNT - 1) / 2) * LightLaneTuning.COIN_SPACING);
+                    if (this._clearOfWarnings(lane, (centre - reach), (centre + reach)) && !this._reserved(lane, (centre - reach), (centre + reach))) {
+                        this._gateCoins(lane, z);
+                    }
                     return;
                 }
             }

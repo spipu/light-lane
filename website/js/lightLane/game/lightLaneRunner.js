@@ -39,6 +39,35 @@ class LightLaneRunner {
     }
 
     /**
+     * @param {LightLaneRunner} other
+     * @returns {LightLaneRunner} this, in the state of other (the robot's copies of the simulation); its world stays its own
+     */
+    copyFrom(other) {
+        this._lane       = other._lane;
+        this._x          = other._x;
+        this._y          = other._y;
+        this._fromX      = other._fromX;
+        this._toX        = other._toX;
+        this._laneTime   = other._laneTime;
+        this._laneSide   = other._laneSide;
+        this._originLane = other._originLane;
+        this._jumping    = other._jumping;
+        this._jumpTime   = other._jumpTime;
+        this._jumpHeight = other._jumpHeight;
+        this._jumpTotal  = other._jumpTotal;
+        this._fastDrop   = other._fastDrop;
+        this._slideTime  = other._slideTime;
+        this._sliding    = other._sliding;
+        this._queued     = other._queued;
+        this._queuedAge  = other._queuedAge;
+        this._slowTime   = other._slowTime;
+        this._fragile    = other._fragile;
+        this._boots      = other._boots;
+
+        return this;
+    }
+
+    /**
      * One step: the orders received, the queue, the moves.
      *
      * @param {number}          dt

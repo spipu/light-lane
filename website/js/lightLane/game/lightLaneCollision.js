@@ -63,7 +63,7 @@ class LightLaneCollision {
     /**
      * What an entry does to the runner (gameplay § 5.2).
      *
-     * @param {string} kind  - LightLaneEntity.HURDLE, GATE or BLOCK
+     * @param {string} kind  - LightLaneEntity.HURDLE, GATE, BLOCK, PROWLER or STALKER (a block or an enemy from the top: a shock)
      * @param {string} entry - LightLaneCollision constant
      * @returns {string} LightLaneCollision.DEATH, STUMBLE, STUMBLE_LAND (on its feet behind it) or IGNORE
      */
@@ -74,7 +74,7 @@ class LightLaneCollision {
             case LightLaneCollision.SIDE:
                 return LightLaneCollision.STUMBLE;
             case LightLaneCollision.TOP:
-                return ((kind === LightLaneEntity.BLOCK) ? LightLaneCollision.DEATH : LightLaneCollision.STUMBLE_LAND);
+                return (((kind === LightLaneEntity.HURDLE) || (kind === LightLaneEntity.GATE)) ? LightLaneCollision.STUMBLE_LAND : LightLaneCollision.DEATH);
             default:
                 return LightLaneCollision.IGNORE;
         }

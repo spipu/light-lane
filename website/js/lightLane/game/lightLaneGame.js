@@ -5,7 +5,8 @@
  * sampler (LightLaneCommandSampler); the simulation (LightLaneSimulation) never sees the engine; the presentation
  * (LightLanePresentation) reads it. Any error of the run stops it and brings the menus back with the error (_guard).
  *
- * The test mode (LightLaneTestMode, local host only) imposes the start tier and the scripted orders.
+ * The test mode (LightLaneTestMode, local host only) imposes the start tier and the scripted orders; with `pilot`, the
+ * robot (LightLaneRobot) gives the orders.
  */
 class LightLaneGame {
     /**
@@ -19,6 +20,7 @@ class LightLaneGame {
         this._presentation    = new LightLanePresentation(this._simulation);
         this._controls        = null;
         this._sampler         = null;
+        this._robot           = null;
         this._orders          = [];
         this._running         = false;
         this._paused          = false;
@@ -28,7 +30,7 @@ class LightLaneGame {
         // The pause menu was at its root on the previous frame: an Escape that has just closed the options (the
         // socle closes them on keydown) must not also leave the pause.
         this._pauseAtRoot     = false;
-        this._best            = 0;
+        this._best            = null;    // the record: {score, distance, coins}, null without any
         this._overDisplay     = null;
         this._overModal       = null;
         this._overPending     = false;   // the run is over, its score being saved
@@ -37,7 +39,7 @@ class LightLaneGame {
     }
 
     async start() {
-        const best = await lightLaneScores.list().then((scores) => ((scores.length > 0) ? scores[0].score : 0), () => 0);
+        const best = await lightLaneScores.list().then((scores) => ((scores.length > 0) ? LightLaneGame._record(scores[0]) : null), () => null);
         loader.reset();
         loader.beginBatch();
         this._presentation.build(this._testMode.isLod());
@@ -62,6 +64,7 @@ class LightLaneGame {
         this._presentation.show(best, () => this._guard(this._togglePause));
         this._controls = new LightLaneControls(this._presentation.getDisplay());
         this._sampler  = new LightLaneCommandSampler(this._controls, this._testMode.getScript());
+        this._robot    = ((this._testMode.isPilot()) ? new LightLaneRobot() : null);
         this._presentation.bindControls(this._controls);
         this._running  = true;
         document.addEventListener('visibilitychange', this._onVisibility);
@@ -93,6 +96,9 @@ class LightLaneGame {
         this._overPending = false;
         this._presentation.newRun();
         this._sampler.restart();
+        if (this._robot !== null) {
+            this._robot.reset();
+        }
         this._presentation.getEngine().resetDeltaClock();
     }
 
@@ -205,6 +211,11 @@ class LightLaneGame {
         saved.then((entry) => this._guard(this._showGameOver, {run: run, entry: entry}));
     }
 
+    // What the HUD shows of the record.
+    static _record(run) {
+        return {score: run.score, distance: run.distance, coins: run.coins, time: (run.time ?? null)};
+    }
+
     // A storage failure: the run is shown without a rank.
     static _notSaved(error) {
         console.warn('LightLaneGame - score not saved: ' + error.message);
@@ -216,7 +227,9 @@ class LightLaneGame {
         if (!this._running || !this._overPending) {
             return;
         }
-        this._best        = Math.max(this._best, result.run.score);
+        if ((this._best === null) || (result.run.score > this._best.score)) {
+            this._best = LightLaneGame._record(result.run);
+        }
         this._overDisplay = new AppMenuDisplay('screen').init(true);
         this._overModal   = new LightLaneGameOverModal(this._overDisplay)
             .setOnReplay(() => this._guard(this._replay))
@@ -225,7 +238,7 @@ class LightLaneGame {
                 this._navigator.endGameToScores((result.entry !== null) ? result.entry.id : null);
             })
             .setOnQuit(() => this.quit())
-            .show(result.run, ((result.entry !== null) ? result.entry.rank : null), this._best);
+            .show(result.run, ((result.entry !== null) ? result.entry.rank : null), this._best.score);
     }
 
     _replay() {
@@ -271,6 +284,9 @@ class LightLaneGame {
         const simulation = this._simulation;
         if (simulation.getState() === LightLaneSimulation.RUNNING) {
             this._sampler.sample(simulation.getRunTime(), this._orders);
+            if (this._robot !== null) {
+                this._robot.update(simulation, this._orders);
+            }
         } else if (this._overModal !== null) {
             // The jump order plays again (art § 10).
             if (this._sampler.sample(simulation.getRunTime(), this._orders).includes(LightLaneCommandSampler.JUMP)) {

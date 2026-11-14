@@ -32,7 +32,7 @@ class LightLanePatterns {
     }
 }
 
-// The enemies' codes: rows holding one are left out of the draw until plan step 11 brings the enemies.
+// The enemies' codes (prowler, stalkers), laid by their meeting point.
 LightLanePatterns.ENEMIES = Object.freeze(['R', 'T<', 'T>']);
 // [Id, elements, tier, weight, coins: 'arc' over the hurdle, 'line' on the free centre, 'centre' along the corridor]
 LightLanePatterns.TABLE = Object.freeze([
@@ -52,7 +52,7 @@ LightLanePatterns.TABLE = Object.freeze([
     ['N0', '. . .', 1, 0], ['N1', '. B6 .', 1, 0],
 ].map(([id, elements, tier, weight, coins]) => {
     const lanes   = elements.split(' ');
-    const longest = Math.max(0, ...lanes.map((code) => (((code === '.') || LightLanePatterns.ENEMIES.includes(code)) ? 0 : LightLaneTuning.OBSTACLES[code].length)));
+    const longest = Math.max(0, ...lanes.map((code) => ((code === '.') ? 0 : LightLaneTuning.OBSTACLES[code].length)));
 
     return Object.freeze({
         id:       id,

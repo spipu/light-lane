@@ -155,25 +155,6 @@ class LightLaneOccupancy {
     }
 
     /**
-     * @param {int}    lane
-     * @param {number} zFrom
-     * @param {number} zTo
-     * @returns {boolean} no cell of the lane over [zFrom, zTo) is blocked, void or a gap (a coin may lie there, § 9)
-     */
-    isClear(lane, zFrom, zTo) {
-        const from = this.cellOf(zFrom);
-        const to   = Math.ceil(((zTo - this._z0) / LightLaneTuning.CELL) - LightLaneOccupancy.EPSILON);
-        for (let k = from; k < to; k++) {
-            const state = this.get(lane, k);
-            if ((state === LightLaneOccupancy.BLOCKED) || (state === LightLaneOccupancy.VOID) || (state === LightLaneOccupancy.GAP)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
      * @param {number} time  - s
      * @param {number} speed - m/s
      * @returns {int} c(t) = ceil(t × v / CELL)

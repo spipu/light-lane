@@ -1,6 +1,8 @@
 /**
  * The run's HUD (art § 9), DOM in the 1920 × 1080 letterbox, sized in cqh (css/lightLane.css): top right the score,
- * the record and the time played (mm:ss) under it; centre the countdown (3, 2, 1, GO, each zoomed from 0.8 to 1.0 then
+ * under it the run's line (distance, coins, time played mm:ss), then the record's (its score, distance, coins and time,
+ * « – » for a record kept before the time was; a
+ * value of the run past the record's lights up); centre the countdown (3, 2, 1, GO, each zoomed from 0.8 to 1.0 then
  * faded); top left the pause button of the HUD, clickable with the mouse, hidden while the touch controls show their
  * own at the same place;
  * bottom centre the frame rate when the setting asks for it. The DOM is written only when a shown value changes.
@@ -16,17 +18,19 @@ class LightLaneHud extends AbstractHud {
         super(engine);
 
         this._simulation = simulation;
-        this._best       = 0;
+        this._best       = null;
         this._onPause    = null;
         this._pauseShown = true;
         this._shield     = null;
         this._numbers    = new Intl.NumberFormat(appTranslator.getLocale());
+        this._metres     = null;
         this._els        = {};
         this._shown      = {};
     }
 
     /**
-     * @param {int} best - the record shown (the first of the 10 best scores, 0 without any)
+     * @param {{score: int, distance: int, coins: int, time: int|null}|null} best - the record shown (the first of the 10 best scores),
+     *        null without any (zeros shown)
      */
     setBest(best) {
         this._best = best;
@@ -68,10 +72,20 @@ class LightLaneHud extends AbstractHud {
         els.root       = root;
         const block    = this._add(root, 'div', 'light-lane-hud-score-block');
         els.score      = this._add(block, 'div', 'light-lane-hud-score');
-        const best     = this._add(block, 'div', 'light-lane-hud-best');
-        els.bestLabel  = this._add(best, 'span', 'light-lane-hud-best-label');
-        els.best       = this._add(best, 'span', 'light-lane-hud-best-value');
-        els.time       = this._add(block, 'div', 'light-lane-hud-time');
+        // One grid for the run's line and the record's: their distance, coins and time in the same columns (user
+        // request); the run's first cell is empty (its score is the big one above).
+        const stats    = this._add(block, 'div', 'light-lane-hud-stats');
+        this._add(stats, 'span', 'light-lane-hud-run');
+        els.distance   = this._add(stats, 'span', 'light-lane-hud-stat light-lane-hud-run');
+        els.coins      = this._stat(stats, LightLaneHud.COIN_ICON, 'light-lane-hud-run');
+        els.time       = this._add(stats, 'span', 'light-lane-hud-stat light-lane-hud-run light-lane-hud-time');
+        this._add(stats, 'span', 'light-lane-hud-rule');
+        const record   = this._add(stats, 'span', 'light-lane-hud-stat light-lane-hud-best');
+        els.bestLabel  = this._add(record, 'span', 'light-lane-hud-best-label');
+        els.best       = this._add(record, 'span', 'light-lane-hud-value');
+        els.bestDistance = this._add(stats, 'span', 'light-lane-hud-stat light-lane-hud-best');
+        els.bestCoins  = this._stat(stats, LightLaneHud.COIN_ICON, 'light-lane-hud-best');
+        els.bestTime   = this._add(stats, 'span', 'light-lane-hud-stat light-lane-hud-best');
         els.countdown  = this._add(root, 'div', 'light-lane-hud-countdown');
         els.pause      = this._add(root, 'button', 'light-lane-hud-pause');
         els.pause.type = 'button';
@@ -88,6 +102,7 @@ class LightLaneHud extends AbstractHud {
     // The language may change in the pause's options: the labels and the number format follow it.
     refreshTexts() {
         this._numbers = new Intl.NumberFormat(appTranslator.getLocale());
+        this._metres  = new Intl.NumberFormat(appTranslator.getLocale(), {style: 'unit', unit: 'meter', unitDisplay: 'short', maximumFractionDigits: 0});
         this._shown   = {};
         if (this._els.root === undefined) {
             return this;
@@ -102,9 +117,23 @@ class LightLaneHud extends AbstractHud {
         if (this._els.root === undefined) {
             return;
         }
-        this._text('score', this._numbers.format(this._simulation.getScore().getScore()));
-        this._text('best', this._numbers.format(this._best));
-        this._text('time', LightLaneHud.formatTime(this._simulation.getRunTime()));
+        const score    = this._simulation.getScore();
+        const distance = Math.floor(this._simulation.getDistance());
+        const coins    = score.getCoins();
+        const best     = (this._best ?? LightLaneHud.NO_RECORD);
+        this._number('score', score.getScore(), this._numbers);
+        this._number('distance', distance, this._metres);
+        this._number('coins', coins, this._numbers);
+        this._number('time', Math.floor(this._simulation.getRunTime()), null);
+        this._number('best', best.score, this._numbers);
+        this._number('bestDistance', best.distance, this._metres);
+        this._number('bestCoins', best.coins, this._numbers);
+        this._number('bestTime', best.time, null);
+        // The run's values past the record's light up (none without a record).
+        const record = (this._best !== null);
+        this._mark('score', (record && (score.getScore() > best.score)));
+        this._mark('distance', (record && (distance > best.distance)));
+        this._mark('coins', (record && (coins > best.coins)));
         this._display('pause', this._pauseShown);
         this._updateCountdown();
         this._updateFps();
@@ -166,6 +195,36 @@ class LightLaneHud extends AbstractHud {
         }
     }
 
+    // A shown number, formatted only when it changes (Intl.NumberFormat at every frame allocates its text): by
+    // `format`, or as mm:ss when it is null (a time: « – » when absent).
+    _number(name, value, format) {
+        if (this._shown[name + '.value'] === value) {
+            return;
+        }
+        this._shown[name + '.value'] = value;
+        if (format !== null) {
+            this._text(name, format.format(value));
+            return;
+        }
+        this._text(name, ((value !== null) ? LightLaneHud.formatTime(value) : LightLaneHud.NO_TIME));
+    }
+
+    // A stat: its icon, then its value (returned: the element whose text changes).
+    _stat(parent, icon, line) {
+        const stat      = this._add(parent, 'span', 'light-lane-hud-stat ' + line);
+        const symbol    = this._add(stat, 'span', 'light-lane-hud-icon');
+        symbol.innerHTML = icon;
+
+        return this._add(stat, 'span', 'light-lane-hud-value');
+    }
+
+    _mark(name, beaten) {
+        if (this._shown[name + '.beaten'] !== beaten) {
+            this._shown[name + '.beaten'] = beaten;
+            this._els[name].classList.toggle('light-lane-hud-beaten', beaten);
+        }
+    }
+
     _style(name, property, value) {
         const key = (name + '.' + property);
         if (this._shown[key] !== value) {
@@ -185,6 +244,12 @@ class LightLaneHud extends AbstractHud {
 // Test mode: the frame rate, then the shield's death count (not translated: a debug line).
 LightLaneHud.SHIELD_SEPARATOR = ' | shield deaths: ';
 LightLaneHud.SECONDS_PER_MINUTE = 60;
+// Without a record: zeros.
+LightLaneHud.NO_RECORD = Object.freeze({score: 0, distance: 0, coins: 0, time: 0});
+// A record kept before the time played was (as the best scores' table).
+LightLaneHud.NO_TIME   = '–';
+// A coin: the octahedron seen from the side, a diamond (art § 5.2).
+LightLaneHud.COIN_ICON = '<svg viewBox="0 0 10 14" aria-hidden="true"><path d="M5 0 L10 7 L5 14 L0 7 Z"/></svg>';
 // Countdown label: zoomed from ZOOM_FROM to 1 over the first ZOOM_SHARE of its time, faded out after FADE_FROM.
 LightLaneHud.ZOOM_FROM  = 0.8;
 LightLaneHud.ZOOM_SHARE = 0.5;

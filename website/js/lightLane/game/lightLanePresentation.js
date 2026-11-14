@@ -4,8 +4,10 @@
  * of art § 2, the bloom when the setting asks for it (WebGL only), the camera (LightLaneCamera), the HUD
  * (LightLaneHud), the effects (LightLaneEffects), the track's tiles from pools of instances (3 or 5 lanes, holed under a
  * gap with the hole's walls beside, the warning zone's blinking red edges and chevrons), one instance per element of
- * the track (pooled by object, linked to its entity by serial), the runner, its clips and its fragile blink. It reads
- * the simulation and plays its events; it never writes the simulation. Bonuses are drawn from plan step 12.
+ * the track (pooled by object, linked to its entity by serial; an enemy at its moving front, a stalker's floor arrow
+ * while it announces its move), the Sentinel and its shots (marks, column, sweeps), the runner, its clips and its fragile
+ * blink. It reads the simulation and plays its events; it never writes the simulation. Bonuses are drawn from plan
+ * step 12.
  */
 class LightLanePresentation {
     /**
@@ -21,7 +23,7 @@ class LightLanePresentation {
         this._fog          = null;
         this._controls     = null;
         this._rendererCode = null;
-        this._best         = 0;
+        this._best         = null;
         this._onPause      = null;
         this._shield       = null;
         this._runner       = null;
@@ -38,12 +40,15 @@ class LightLanePresentation {
         this._lanesGaps    = LightLaneTuning.LANES_5.map(() => null);   // the gap codes of a row's lanes, reused
         this._ids          = new Map();   // object code → id
         this._views        = new Map();   // entity → {serial, code, instance, frame}
+        this._arrows       = new Map();   // a stalker → its floor arrow's view, same form
+        this._sentinel     = null;        // the Sentinel's instances: {ship, mark, beam, frame, ray}
         this._free         = new Map();   // object code → free instances
         this._frame        = 0;
         this._events       = [];      // the runner's clip events of a frame (footsteps: the sound, step 14)
         this._bloom        = {glowDepthShading: LightLaneTuning.BLOOM_GLOW_DEPTH_SHADING, glowFar: LightLaneTuning.BLOOM_GLOW_FAR,
             glowFarMax: LightLaneTuning.BLOOM_GLOW_FAR_MAX};   // RendererWebglBloom.DEFAULTS otherwise
-        this._facing       = [0, 0, 0];   // the runner's rotation, degrees: facing +z, its lean in z
+        this._facing       = [0, 0, 0];
+        this._enemyAngles  = [0, 0, 0];   // an enemy's rotation, degrees, written in place   // the runner's rotation, degrees: facing +z, its lean in z
         // The runner's light: its position moved in place every frame.
         this._lightRange   = (LightLaneTuning.RUNNER_LIGHT_RANGE * LightLaneTuning.RUNNER_HEIGHT / 2);
         this._light        = new Light([...LightLaneTuning.RUNNER_LIGHT_COLOR], this._lightRange, [0, 0, 0]);
@@ -64,7 +69,7 @@ class LightLanePresentation {
     /**
      * The scene loaded: the screen, the engine, the HUD, the instances.
      *
-     * @param {int}        best    - the record shown on the HUD
+     * @param {{score: int, distance: int, coins: int, time: int|null}|null} best - the record shown on the HUD
      * @param {function()} onPause - the HUD's pause button
      */
     show(best, onPause) {
@@ -79,6 +84,14 @@ class LightLanePresentation {
         const slots   = (Math.ceil((LightLaneTuning.TRACK_BEHIND + LightLaneTuning.TRACK_AHEAD) / LightLaneTuning.TILE_LENGTH) + 1);
         this._rows    = Array.from({length: slots}, () => ({row: null, lit: null, parts: []}));
         this._fog     = LightLanePresentation.instance(this._id(LightLaneModels.FOG));
+        this._sentinel = {
+            ship:  LightLanePresentation.instance(this._id(LightLaneModels.SENTINEL)),
+            mark:  LightLanePresentation.instance(this._id(LightLaneModels.STRIKE_MARK + 1)),
+            beam:  LightLanePresentation.instance(this._id(LightLaneModels.STRIKE_BEAM)),
+            frame: LightLanePresentation.instance(this._id(LightLaneModels.sweepCode(true, 0, LightLanePresentation.LOW))),
+            ray:   LightLanePresentation.instance(this._id(LightLaneModels.sweepCode(false, 0, LightLanePresentation.LOW))),
+        };
+        this._sentinel.mark.setRenderDepthBias(LightLaneTuning.FLOOR_DEPTH_BIAS);
         this._effects.bind();
         this._buildDisplay();
 
@@ -125,6 +138,10 @@ class LightLanePresentation {
             this._release(view);
         }
         this._views.clear();
+        for (const view of this._arrows.values()) {
+            this._release(view);
+        }
+        this._arrows.clear();
         this._rows.forEach((slot) => this._clearSlot(slot));
         this._hidden       = false;
         this._deathLight   = null;
@@ -233,6 +250,9 @@ class LightLanePresentation {
                     this._restart      = !(runner.isJumping() || runner.isSliding());
                     this._effects.shake(LightLaneTuning.STUMBLE_SHAKE);
                     break;
+                case LightLaneEvents.STRIKE:
+                    this._effects.flash(LightLaneTuning.STRIKE_FLASH);
+                    break;
                 case LightLaneEvents.DEATH:
                     this._effects.flash(LightLaneTuning.DEATH_FLASH[event.value]);
                     this._deathLight = {time: 0, duration: LightLaneTuning.DYING_TIME[event.value]};
@@ -339,6 +359,7 @@ class LightLanePresentation {
         this._drawFog();
         this._drawTrack();
         this._drawEntities();
+        this._drawSentinel();
         if (!this._hidden) {
             engine.drawInstance(this._runner.getInstance());
         }
@@ -478,9 +499,19 @@ class LightLanePresentation {
         const engine  = this._engine;
         const frame   = ++this._frame;
         const runTime = this._simulation.getRunTime();
+        const z       = this._simulation.getZ();
+        const blink   = ((Math.floor(this._time * LightLaneTuning.WARN_BLINK_HZ * 2) % 2) === 0);
         for (const entity of this._simulation.getTrack().getActive()) {
-            let code = LightLaneModels.obstacleCode(entity);
+            let code = LightLaneModels.obstacleCode(entity, blink);
             if (code === null) {
+                continue;
+            }
+            // An enemy shows once it is within ENEMY_SHOWN (generation § 5), at its moving front.
+            if (entity.isEnemy()) {
+                if ((entity.getFront() - z) > LightLaneTuning.ENEMY_SHOWN) {
+                    continue;
+                }
+                this._drawEnemy(entity, code, frame);
                 continue;
             }
             // A block shows its side crosses on the side the camera sees.
@@ -492,16 +523,7 @@ class LightLanePresentation {
             if (coin && entity.isTaken() && (since >= LightLaneTuning.COIN_TAKE_TIME)) {
                 continue;
             }
-            let view = this._views.get(entity);
-            if ((view !== undefined) && ((view.serial !== entity.getSerial()) || (view.code !== code))) {
-                this._release(view);
-                view = undefined;
-            }
-            if (view === undefined) {
-                view = {serial: entity.getSerial(), code: code, instance: this._acquire(code), frame: frame};
-                this._views.set(entity, view);
-            }
-            view.frame = frame;
+            const view = this._view(this._views, entity, code, frame);
             if (coin) {
                 this._placeCoin(view.instance, entity, since);
             } else {
@@ -510,12 +532,119 @@ class LightLanePresentation {
             engine.drawInstance(view.instance);
         }
         // The views of the elements gone (retired, or a coin faded out).
-        for (const [entity, view] of this._views) {
-            if (view.frame !== frame) {
-                this._release(view);
-                this._views.delete(entity);
+        for (const views of [this._views, this._arrows]) {
+            for (const [entity, view] of views) {
+                if (view.frame !== frame) {
+                    this._release(view);
+                    views.delete(entity);
+                }
             }
         }
+    }
+
+    // An enemy at its moving front; a stalker announcing its move: its floor arrow on the lane it goes to, before it.
+    _drawEnemy(entity, code, frame) {
+        const view    = this._view(this._views, entity, code, frame);
+        // Leaning into its move across, its heading kept (user request); pivot at its bottom: the wheels stay on the track.
+        const lean = Math.max(-LightLaneTuning.ENEMY_LEAN_MAX, Math.min(LightLaneTuning.ENEMY_LEAN_MAX, (entity.getHeading() * LightLaneTuning.ENEMY_LEAN)));
+        this._enemyAngles[2] = (LightLanePresentation.ENEMY_LEAN_SIGN * lean);
+        view.instance.setRotation(this._enemyAngles);
+        view.instance.placeAt(entity.getX(), 0, (entity.getFront() + (entity.getLength() / 2)));
+        this._engine.drawInstance(view.instance);
+        if (!entity.isWarning()) {
+            return;
+        }
+        const side  = ((entity.getToLane() < entity.getLane()) ? LightLaneModels.ARROW_SIDES[0][0] : LightLaneModels.ARROW_SIDES[1][0]);
+        const arrow = this._view(this._arrows, entity, (LightLaneModels.STALKER_ARROW + side), frame);
+        arrow.instance.placeAt((entity.getToLane() * LightLaneTuning.LANE_WIDTH), -LightLaneTuning.TILE_THICKNESS, (entity.getFront() - LightLaneTuning.STALKER_ARROW_AHEAD));
+        this._engine.drawInstance(arrow.instance);
+    }
+
+    // The view of an entity in a map of views, made or remade for its serial and object.
+    _view(views, entity, code, frame) {
+        let view = views.get(entity);
+        if ((view !== undefined) && ((view.serial !== entity.getSerial()) || (view.code !== code))) {
+            this._release(view);
+            view = undefined;
+        }
+        if (view === undefined) {
+            view = {serial: entity.getSerial(), code: code, instance: this._acquire(code), frame: frame};
+            views.set(entity, view);
+        }
+        view.frame = frame;
+
+        return view;
+    }
+
+    // The Sentinel over the track (gameplay § 7.1) and its attack under way: a strike's mark (growing, blinking at the
+    // end), its column, its fading trace; a sweep's frame (blinking), then its ray. Before the runner, who keeps running.
+    _drawSentinel() {
+        const sentinel = this._simulation.getSentinel();
+        if (!sentinel.isActive()) {
+            return;
+        }
+        const engine = this._engine;
+        const views  = this._sentinel;
+        const z      = this._simulation.getZ();
+        const attack = sentinel.getAttack();
+        const t      = sentinel.getAttackTime();
+        const strike = (attack === LightLaneSentinel.STRIKE);
+        const firing = (strike && (t < (LightLaneTuning.STRIKE_WARN + LightLaneTuning.STRIKE_TIME)));
+        views.ship.setObject(this._id((firing) ? LightLaneModels.SENTINEL_STRIKE : LightLaneModels.SENTINEL));
+        views.ship.placeAt(sentinel.getX(), sentinel.getY(), (z + sentinel.getAhead()));
+        engine.drawInstance(views.ship);
+        if (strike) {
+            this._drawStrike(sentinel, t, z);
+        } else if (attack !== null) {
+            this._drawSweep(sentinel, attack, t, z);
+        }
+    }
+
+    _drawStrike(sentinel, t, z) {
+        const views = this._sentinel;
+        const warn  = LightLaneTuning.STRIKE_WARN;
+        const from  = (z - LightLaneTuning.STRIKE_MARK[0]);
+        const steps = LightLaneTuning.STRIKE_WIDTHS.length;
+        if (t < warn) {
+            const blinking = (t > (warn - LightLaneTuning.STRIKE_BLINK));
+            if (blinking && ((Math.floor(t * LightLaneTuning.STRIKE_BLINK_HZ * 2) % 2) === 1)) {
+                return;
+            }
+            views.mark.setObject(this._id(LightLaneModels.STRIKE_MARK + Math.min(steps, (1 + Math.floor((t / warn) * steps)))));
+            views.mark.setRenderLight(1);
+            views.mark.placeAt(sentinel.getAimX(), -LightLaneTuning.TILE_THICKNESS, from);
+            this._engine.drawInstance(views.mark);
+            return;
+        }
+        const after = (t - warn);
+        if (after < LightLaneTuning.STRIKE_TIME) {
+            views.beam.placeAt(sentinel.getAimX(), -LightLaneTuning.TILE_THICKNESS, from);
+            this._engine.drawInstance(views.beam);
+        }
+        // The trace dies out after the column.
+        const fade = Math.max(0, (1 - (Math.max(0, (after - LightLaneTuning.STRIKE_TIME)) / LightLaneTuning.STRIKE_TRACE)));
+        views.mark.setObject(this._id(LightLaneModels.STRIKE_MARK + steps));
+        views.mark.setRenderLight(fade);
+        views.mark.placeAt(sentinel.getAimX(), -LightLaneTuning.TILE_THICKNESS, from);
+        this._engine.drawInstance(views.mark);
+    }
+
+    _drawSweep(sentinel, attack, t, z) {
+        const views  = this._sentinel;
+        const height = LightLaneSentinel.HEIGHT[attack];
+        const wide   = ((this._simulation.laneExists(LightLaneTrackGenerator.OUTER)) ? 1 : 0);
+        if (t < LightLaneTuning.SWEEP_WARN) {
+            if ((Math.floor(t * LightLaneTuning.SWEEP_BLINK_HZ * 2) % 2) === 1) {
+                return;
+            }
+            views.frame.setObject(this._id(LightLaneModels.sweepCode(true, wide, height)));
+            views.frame.placeAt(0, -LightLaneTuning.TILE_THICKNESS, (z + LightLaneTuning.SWEEP_AHEAD));
+            this._engine.drawInstance(views.frame);
+            return;
+        }
+        views.ray.setObject(this._id(LightLaneModels.sweepCode(false, wide, height)));
+        views.ray.placeAt(0, -LightLaneTuning.TILE_THICKNESS, (z + sentinel.getSweepAhead()));
+        this._engine.drawInstance(views.ray);
     }
 
     // A coin spins and bobs (art § 5.2); picked up, it rises and fades out (art § 7).
@@ -639,5 +768,10 @@ LightLanePresentation.SHARD_PLAYER    = 'Player';
 LightLanePresentation.LEAN_SIGN       = -1;
 // The sides of a lane: left, right.
 LightLanePresentation.SIDES           = Object.freeze([-1, 1]);
+// Sign of Instance.setRotation for an enemy's lean into a move towards +x (Matrix.composeInstanceTransform: +z tilts the
+// top towards −x).
+LightLanePresentation.ENEMY_LEAN_SIGN = -1;
+// The sweeps' heights (SWEEP_DRAWN keys).
+LightLanePresentation.LOW             = 'low';
 // The bloom works with the WebGL renderer only.
 LightLanePresentation.BLOOM_RENDERER  = 'webgl';

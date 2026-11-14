@@ -26,13 +26,17 @@ node bench/run.js --suite runner   # one suite
 - `collision` — whole runs on written rows: each obstacle passed, each death (front, top, stumbles, gap), the hurdle's
   jump window at the lowest and the highest speeds.
 - `commands` — the gamepad stick and buttons turned into orders (direction, thresholds, edges).
-- `generation` — the speed curve, and the track of tiers 0 to 2: sections of 3 and 5 lanes, lanes that end after a
+- `enemies` — the prowlers and stalkers: their meeting, head-on, from the side, jumped over, the stalker's move.
+- `generation` — the speed curve, and the track of every tier: sections of 3 and 5 lanes, lanes that end after a
   warning, no repeated pattern, every row passable, coins and bonuses where they may be, pattern frequencies as drawn,
-  the first encounters.
-- `models` — the objects built in code.
+  the enemies' reserved lanes, the stretches bridled for the Sentinel, the first encounters.
+- `models` — the runner's model, the enemies and the Sentinel within their triangle budgets.
 - `queue` — an order that cannot run waits 0.20 s, the latest replaces the older.
 - `runner` — jump, slide, lane change, fall.
+- `robot` — a robot plays the real game with a human's latency on every tier: no death
+  (`LIGHT_LANE_ROBOT_METERS=30000` for the full campaign).
 - `seed` — two runs with the same seed give the same track.
+- `sentinel` — the Sentinel's strike and sweeps: what each does, how each is dodged.
 - `scores` — the 10 best scores, ranks, ties, surplus, old records (fake database and memory).
 - `static` — every file served is declared in `js/libBootstrap.json`, every declared file exists once, each class
   after the class it extends; every translation in the 4 languages.
