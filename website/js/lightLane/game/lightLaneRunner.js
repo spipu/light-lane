@@ -33,7 +33,7 @@ class LightLaneRunner {
         this._queuedAge  = 0;
         this._slowTime   = Infinity;
         this._fragile    = 0;
-        this.boots       = false;  // set by the bonus (step 11)
+        this.boots       = false;  // set by the bonus (step 12)
 
         return this;
     }

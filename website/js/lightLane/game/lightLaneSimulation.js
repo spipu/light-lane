@@ -209,7 +209,7 @@ class LightLaneSimulation {
 
     /**
      * @param {int} lane
-     * @returns {boolean} the lane exists at the runner's z (3 lanes until step 9 brings the sections)
+     * @returns {boolean} the lane exists at the runner's z (3 lanes until step 10 brings the sections)
      */
     laneExists(lane) {
         return LightLaneTuning.LANES_3.includes(lane);

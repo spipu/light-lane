@@ -49,5 +49,5 @@ LightLanePatterns.TABLE = Object.freeze([
     });
 }));
 LightLanePatterns.BY_ID = new Map(LightLanePatterns.TABLE.map((pattern) => [pattern.id, pattern]));
-// Elements a row may hold before step 10 brings the enemies.
+// Elements a row may hold before step 11 brings the enemies.
 LightLanePatterns.ENEMIES = Object.freeze(['R', 'T<', 'T>']);

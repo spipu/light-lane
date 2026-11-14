@@ -5,7 +5,7 @@
  * own at the same place;
  * bottom centre the frame rate when the setting asks for it. The DOM is written only when a shown value changes.
  *
- * Plan step 11 adds the bonus gauges (top left) and the double score's colour.
+ * Plan step 12 adds the bonus gauges (top left) and the double score's colour.
  */
 class LightLaneHud extends AbstractHud {
     /**

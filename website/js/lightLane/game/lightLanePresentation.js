@@ -6,7 +6,7 @@
  * instance per element of the track (pooled by object, linked to its entity by serial), the runner, its clips and its
  * fragile blink. It reads the simulation and plays its events; it never writes the simulation.
  *
- * Plan step 8: 3 lanes; the sections of 5 lanes come with step 9.
+ * Plan step 8: 3 lanes; the sections of 5 lanes come with step 10.
  */
 class LightLanePresentation {
     /**
@@ -39,7 +39,7 @@ class LightLanePresentation {
         this._views        = new Map();   // entity → {serial, code, instance, frame}
         this._free         = new Map();   // object code → free instances
         this._frame        = 0;
-        this._events       = [];      // the runner's clip events of a frame (footsteps: the sound, step 13)
+        this._events       = [];      // the runner's clip events of a frame (footsteps: the sound, step 14)
         this._bloom        = {glowDepthShading: LightLaneTuning.BLOOM_GLOW_DEPTH_SHADING, glowFar: LightLaneTuning.BLOOM_GLOW_FAR,
             glowFarMax: LightLaneTuning.BLOOM_GLOW_FAR_MAX};   // RendererWebglBloom.DEFAULTS otherwise
         this._facing       = [0, 0, 0];   // the runner's rotation, degrees: facing +z, its lean in z

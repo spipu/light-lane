@@ -9,7 +9,7 @@
  * repeating the last ones (§ 4.5, steps 1 to 4). Coins (§ 9): the pattern's own (arc over the hurdle, rest line,
  * corridor centre), else a line with COIN_LINE_CHANCE on the free lane nearest the centre.
  *
- * Plan step 8: 3 lanes, no enemy, no fairness check; step 9 brings the sections, the 5 lanes and the check.
+ * Plan step 8: 3 lanes, no enemy, no fairness check; step 10 brings the sections, the 5 lanes and the check.
  */
 class LightLaneTrackGenerator {
     constructor() {
