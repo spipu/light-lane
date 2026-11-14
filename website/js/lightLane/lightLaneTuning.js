@@ -75,33 +75,28 @@ LightLaneTuning.CAMERA_ROLL_BACK_TIME = 0.2;
 LightLaneTuning.CAMERA_FOV            = 36;
 
 // --- Scene (art § 2) ---
-LightLaneTuning.AMBIENT               = [255, 255, 255];
-// Test (user request, 2026-11-13): a light at the runner's centre, range RUNNER_LIGHT_RANGE × its half height. A light
-// never makes a face brighter than its painted colour (Object3dRendererBase._pointColor clamps ambient + lights to
-// 255): with it on, the ambient goes down to AMBIENT_LIT and the tiles' tops are cut in cells of TILE_TOP_CELL (the
-// light is computed at the vertices).
-LightLaneTuning.RUNNER_LIGHT_ON       = true;
+// A light at the runner's centre (user request, 2026-11-13; kept for good), range RUNNER_LIGHT_RANGE × its half
+// height. A light never makes a face brighter than its painted colour (Object3dRendererBase._pointColor clamps
+// ambient + lights to 255): the ambient is down to AMBIENT and the tiles' tops are cut in cells of TILE_TOP_CELL near
+// the runner (the light is computed at the vertices).
 // (120, 200, 220) raised by 25 %, then by 50 % (user requests); a component over 255 is fine: only ambient + lights
 // is clamped, so a stronger light mostly widens the part brought to the full painted colour.
 LightLaneTuning.RUNNER_LIGHT_COLOR    = [225, 375, 412];
 LightLaneTuning.RUNNER_LIGHT_RANGE    = 2.0;
-// With the light on, the ambient is a third: the floor is painted LIGHT_COMPENSATION times lighter (the same away
-// from the light, up to that many times lighter in it) and every other face keeps its look through its light group's
-// factor (LightLaneModels.LIGHT_GROUP) or its instance's render light.
-LightLaneTuning.AMBIENT_LIT           = [85, 85, 85];
+// The ambient is a third: the floor is painted LIGHT_COMPENSATION times lighter (the same away from the light, up to
+// that many times lighter in it) and every other face keeps its look through its light group's factor
+// (LightLaneModels.LIGHT_GROUP) or its instance's render light.
+LightLaneTuning.AMBIENT               = [85, 85, 85];
 // At a death (user request), the runner's light flares to DEATH_LIGHT_PEAK times its colour and DEATH_LIGHT_RANGE times
 // its range in DEATH_LIGHT_RISE, then dies down to nothing by the end of the dying (DYING_TIME).
 LightLaneTuning.DEATH_LIGHT_PEAK      = 3;
 LightLaneTuning.DEATH_LIGHT_RANGE     = 1.5;
 LightLaneTuning.DEATH_LIGHT_RISE      = 0.12;
-LightLaneTuning.LIGHT_COMPENSATION    = (LightLaneTuning.RUNNER_LIGHT_ON ? (255 / LightLaneTuning.AMBIENT_LIT[0]) : 1);
+LightLaneTuning.LIGHT_COMPENSATION    = (255 / LightLaneTuning.AMBIENT[0]);
 LightLaneTuning.TILE_TOP_CELL         = 0.5;
 // The tiles one tile further than the lit ones: their top in cells of TILE_MID_CELL (user request: an intermediate
 // level of detail before the finest).
 LightLaneTuning.TILE_MID_CELL         = 1.0;
-// Temporary (user request): under the test mode's fixed speed, holding TEST_FORWARD_KEY moves on at TEST_FORWARD_SPEED.
-LightLaneTuning.TEST_FORWARD_KEY      = 'KeyW';
-LightLaneTuning.TEST_FORWARD_SPEED    = 3;
 // The camera sees the ground this far behind the runner (art § 8): the fine cells start there.
 LightLaneTuning.GROUND_SEEN_BEHIND    = 1.1;
 // The fine cells reach this far past the light's range, so a half tile is fine before the light comes onto it (user

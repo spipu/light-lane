@@ -36,7 +36,6 @@ class LightLaneSimulation {
         this._fallForward   = 0;
         this._shield        = false;
         this._fixedSpeed    = null;
-        this._forward       = false;
         this._shieldDeaths  = 0;
         this._pending       = [];     // orders received, handed to the next running step
         // Boxes reused every step.
@@ -103,17 +102,6 @@ class LightLaneSimulation {
             this._accumulator -= LightLaneTuning.STEP_SECONDS;
             this._step(LightLaneTuning.STEP_SECONDS);
         }
-        return this;
-    }
-
-    /**
-     * Temporary (user request): under the test mode's fixed speed, the run moves on at TEST_FORWARD_SPEED while held.
-     *
-     * @param {boolean} held
-     */
-    setTestForward(held) {
-        this._forward = held;
-
         return this;
     }
 
@@ -419,7 +407,7 @@ class LightLaneSimulation {
     _updateSpeed(dt) {
         // The test mode's fixed speed (gameplay § 13).
         if (this._fixedSpeed !== null) {
-            this._speed = ((this._forward) ? LightLaneTuning.TEST_FORWARD_SPEED : this._fixedSpeed);
+            this._speed = this._fixedSpeed;
             return;
         }
         const tier = LightLaneSimulation.tierAt(this._z);

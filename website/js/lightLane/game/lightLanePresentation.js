@@ -43,7 +43,7 @@ class LightLanePresentation {
         this._bloom        = {glowDepthShading: LightLaneTuning.BLOOM_GLOW_DEPTH_SHADING, glowFar: LightLaneTuning.BLOOM_GLOW_FAR,
             glowFarMax: LightLaneTuning.BLOOM_GLOW_FAR_MAX};   // RendererWebglBloom.DEFAULTS otherwise
         this._facing       = [0, 0, 0];   // the runner's rotation, degrees: facing +z, its lean in z
-        // The runner's light (test, LightLaneTuning.RUNNER_LIGHT_ON): its position moved in place every frame.
+        // The runner's light: its position moved in place every frame.
         this._lightRange   = (LightLaneTuning.RUNNER_LIGHT_RANGE * LightLaneTuning.RUNNER_HEIGHT / 2);
         this._light        = new Light([...LightLaneTuning.RUNNER_LIGHT_COLOR], this._lightRange, [0, 0, 0]);
         this._deathLight   = null;    // {time, duration} from a death on: the light flares, then dies down
@@ -386,7 +386,7 @@ class LightLanePresentation {
             }
             // Under the runner's light (art § 2), by half tile (a mark every half tile shows it as a row): fine where the
             // light falls and the camera sees, one coarser row after, all the rest plain (user requests).
-            const lit = ((LightLaneTuning.RUNNER_LIGHT_ON) ? LightLanePresentation._litLevel(row, z, this._lightRange) : null);
+            const lit = LightLanePresentation._litLevel(row, z, this._lightRange);
             if (lit !== slot.lit) {
                 slot.lit = lit;
                 slot.tiles.forEach((tile, i) => tile.setObject(this._id(this._tileVariant(slot.codes[i], lit))));
@@ -559,12 +559,10 @@ class LightLanePresentation {
         this._engine.setFov(LightLaneTuning.CAMERA_FOV)
             .setZBuffer(LightLaneTuning.Z_NEAR, LightLaneTuning.Z_FAR)
             .setBackground(...LightLaneTuning.BACKGROUND)
-            .setLightAmbient([...((LightLaneTuning.RUNNER_LIGHT_ON) ? LightLaneTuning.AMBIENT_LIT : LightLaneTuning.AMBIENT)])
+            .setLightAmbient([...LightLaneTuning.AMBIENT])
             .setDepthShading({...LightLaneTuning.DEPTH_SHADING})
-            .setSky(LightLanePresentation._sky());
-        if (LightLaneTuning.RUNNER_LIGHT_ON) {
-            this._engine.addLight(this._light);
-        }
+            .setSky(LightLanePresentation._sky())
+            .addLight(this._light);
         this._hud = new LightLaneHud(this._engine, this._simulation).setBest(this._best).setOnPause(this._onPause).setShieldSource(this._shield);
         this._screen.bindHud(this._hud);
         this._rows.forEach((slot) => {

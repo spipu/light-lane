@@ -266,10 +266,6 @@ class LightLaneGame {
             this._sampler.discard();
             this._orders.length = 0;
         }
-        // Temporary (user request): under the test mode's fixed speed, the forward key moves on slowly.
-        if (this._testMode.getSpeed() !== null) {
-            simulation.setTestForward(this._controls.readKey(LightLaneTuning.TEST_FORWARD_KEY));
-        }
         const resuming = ((simulation.getState() === LightLaneSimulation.COUNTDOWN) && !simulation.isNewRun());
         simulation.advance(dt, this._orders);
         this._presentation.present(dt, resuming, (this._overModal !== null));
