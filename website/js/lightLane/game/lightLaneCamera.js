@@ -54,8 +54,8 @@ class LightLaneCamera {
         this._y += ((LightLaneCamera._height(feet) - this._y) * catchUp);
         this._z  = (z - LightLaneTuning.CAMERA_BACK);
         const roll = (laneSide * LightLaneTuning.CAMERA_ROLL);
-        const back = Math.min(1, (dt / LightLaneTuning.CAMERA_ROLL_BACK_TIME));
-        this._roll += ((roll - this._roll) * ((laneSide !== 0) ? 1 : back));
+        // Eased both ways (not snapped on at the change's start).
+        this._roll += ((roll - this._roll) * LightLaneCamera.ease(dt, LightLaneTuning.CAMERA_ROLL_TIME));
 
         return this;
     }
@@ -65,10 +65,9 @@ class LightLaneCamera {
      * @param {number[]} offset - the shake, added to the camera's place
      */
     setView(engine, offset) {
-        const look = ((this._fall < 0) ? 0 : (LightLaneTuning.FALL_LOOK_DOWN * Math.min(1, (this._fall / LightLaneTuning.FALL_LOOK_TIME))));
         engine.matrixIdentity();
         engine.matrixRotateZ(this._roll);
-        engine.matrixRotateX(LightLaneTuning.CAMERA_PITCH - look);
+        engine.matrixRotateX(this.getPitch());
         engine.matrixTranslate(-(this._x + offset[0]), -(this._y + offset[1]), -(this._z + offset[2]));
 
         return this;
@@ -91,7 +90,29 @@ class LightLaneCamera {
         return this._roll;
     }
 
+    // Degrees down (setView's matrixRotateX): CAMERA_PITCH, less the look down of a fall.
+    getPitch() {
+        const look = ((this._fall < 0) ? 0 : (LightLaneTuning.FALL_LOOK_DOWN * Math.min(1, (this._fall / LightLaneTuning.FALL_LOOK_TIME))));
+
+        return (LightLaneTuning.CAMERA_PITCH - look);
+    }
+
+    /**
+     * The share of the way to a target covered in dt, the same at any frame rate: 1 − e^(−dt / τ), τ a third of
+     * `time` (95 % of the way covered in `time`).
+     *
+     * @param {number} dt   - s
+     * @param {number} time - s
+     * @returns {number} 0..1
+     */
+    static ease(dt, time) {
+        return (1 - Math.exp(-(LightLaneCamera.EASE_TIME_CONSTANTS * dt) / time));
+    }
+
     static _height(feet) {
         return Math.max((LightLaneTuning.CAMERA_HEIGHT_BASE + (LightLaneTuning.CAMERA_HEIGHT_FEET * feet)), (feet + LightLaneTuning.CAMERA_ABOVE_FEET));
     }
 }
+
+// ease(): 3 time constants, 95 % of the way.
+LightLaneCamera.EASE_TIME_CONSTANTS = 3;

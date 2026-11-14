@@ -436,15 +436,22 @@
     grid-template-columns: 4em 1fr 1fr 1fr 1fr 1fr;
     align-items: center;
     column-gap: 1em;
+    cursor: default;
 }
 
+/* The same box as the rows under it (.app-menu-item's side padding and left border), so each title stands over its
+   column; only its texts are smaller. */
 .light-lane-scores-header {
-    padding: 0 1em 0.4em;
+    padding: 0 0.6em 0.4em;
+    border-left: max(0.08em, 2px) solid transparent;
     border-bottom: max(0.04em, 1px) solid rgba(120, 214, 232, 0.25);
     color: #8FBFCC;
-    font-size: 0.85em;
     letter-spacing: 0.15em;
     text-transform: uppercase;
+}
+
+.light-lane-scores-header > * {
+    font-size: 0.85em;
 }
 
 .light-lane-scores-cell {
@@ -509,7 +516,6 @@
     color: #78D6E8;
 }
 
-/* 3, 2, 1, GO in 220 px; the HUD sets the zoom and the fade. */
 .light-lane-hud-time {
     font-size: 2.41cqh;
     letter-spacing: 0.12em;
@@ -517,6 +523,7 @@
     font-variant-numeric: tabular-nums;
 }
 
+/* 3, 2, 1, GO in 220 px; the HUD sets the zoom and the fade. */
 .light-lane-hud-countdown {
     position: absolute;
     left: 50%;

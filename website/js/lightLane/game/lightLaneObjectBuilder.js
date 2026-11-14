@@ -236,8 +236,6 @@ class LightLaneObjectBuilder {
         return ((((n[0] * out[0]) + (n[1] * out[1]) + (n[2] * out[2])) < 0) ? quad.slice().reverse() : quad);
     }
 
-    // Object3dLoader reads three corners a face (object3dLoader.js): a polygon goes in as a fan of triangles from its
-    // first corner, which keeps the corners' turn.
     // A floor colour under the lowered ambient: LIGHT_COMPENSATION times lighter, an alpha kept.
     static _lighter(color) {
         const k = LightLaneTuning.LIGHT_COMPENSATION;
@@ -245,6 +243,8 @@ class LightLaneObjectBuilder {
         return color.map((c, i) => ((i < 3) ? Math.min(LightLaneObjectBuilder.CHANNEL_MAX, (c * k)) : c));
     }
 
+    // Object3dLoader reads three corners a face (object3dLoader.js): a polygon goes in as a fan of triangles from its
+    // first corner, which keeps the corners' turn.
     _face(pts, color, glow, blendAdd = false) {
         const paint = ((this._floor) ? LightLaneObjectBuilder._lighter(color) : [...color]);
         for (let i = 1; (i + 1) < pts.length; i++) {

@@ -6,7 +6,7 @@
 class LightLaneTranslations {
     static get CATALOG() {
         return {
-            // --- Reused from racing, same texts ---
+            // --- Reused from racing, same texts (menu.storageUnavailable adds the scores) ---
             'menu.options': {
                 fr: 'Options',
                 en: 'Options',
@@ -20,10 +20,10 @@ class LightLaneTranslations {
                 es: 'Ayuda'
             },
             'menu.storageUnavailable': {
-                fr: 'Stockage navigateur indisponible — les paramètres ne seront pas enregistrés.',
-                en: 'Browser storage unavailable — the settings will not be saved.',
-                it: 'Archiviazione del browser non disponibile — le impostazioni non verranno salvate.',
-                es: 'Almacenamiento del navegador no disponible — los ajustes no se guardarán.'
+                fr: 'Stockage navigateur indisponible — les paramètres et les meilleurs scores ne seront pas enregistrés.',
+                en: 'Browser storage unavailable — the settings and the best scores will not be saved.',
+                it: 'Archiviazione del browser non disponibile — le impostazioni e i migliori punteggi non verranno salvati.',
+                es: 'Almacenamiento del navegador no disponible — los ajustes y las mejores puntuaciones no se guardarán.'
             },
             'options.display': {
                 fr: 'Affichage',

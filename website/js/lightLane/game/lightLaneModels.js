@@ -17,7 +17,10 @@ class LightLaneModels {
         // The track's tiles: one size of lines at any distance (user request).
         LightLaneModels._load(LightLaneModels.TILE, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, null));
         LightLaneModels._load(LightLaneModels.ROW3, LightLaneModels._tile(LightLaneTuning.LINE_SIZE_DECOR, null, LightLaneTuning.LANES_3.length));
-        LightLaneModels._load(LightLaneModels.TILE_EDGE, LightLaneModels._tileEdge(LightLaneTuning.LINE_SIZE_DECOR));
+        LightLaneModels._load(LightLaneModels.TILE_EDGE, LightLaneModels._tileEdge(LightLaneTuning.LINE_SIZE_DECOR, null));
+        for (const code of LightLaneModels.GAPS) {
+            LightLaneModels._load(LightLaneModels.tileEdgeCode(code), LightLaneModels._tileEdge(LightLaneTuning.LINE_SIZE_DECOR, code));
+        }
         // The obstacles: one size of lines at any distance (user request: no sudden change as they come near; the
         // bloom's halo keeps them visible far away).
         const line = LightLaneTuning.LINE_SIZE;
@@ -86,6 +89,14 @@ class LightLaneModels {
     }
 
     /**
+     * @param {string} code - X3, X5: the gap of the rightmost lane
+     * @returns {string} the code of the right edge line cut at its hole
+     */
+    static tileEdgeCode(code) {
+        return (LightLaneModels.TILE_EDGE + code.slice(1));
+    }
+
+    /**
      * The holed tile of a gap with the side walls its neighbours need: a wall along the part of the hole a neighbour
      * covers (a plain tile: all of it; a holed tile: what its own hole leaves), none at the track's edge.
      *
@@ -139,7 +150,7 @@ class LightLaneModels {
         const [otherFrom, otherTo] = LightLaneModels._hole(neighbour);
         const spans = [[from, Math.min(to, otherFrom)], [Math.max(from, otherTo), to]];
 
-        return spans.filter(([z0, z1]) => ((z1 - z0) > LightLaneModels.WALL_MIN));
+        return spans.filter(([z0, z1]) => ((z1 - z0) > LightLaneModels.EPSILON));
     }
 
     // The hole of a gap's tile, [from, to] in the tile's frame (z from -TILE_LENGTH / 2).
@@ -262,7 +273,7 @@ class LightLaneModels {
     static _markAt(z, z0, z1) {
         const step = ((z + (LightLaneTuning.TILE_LENGTH / 2)) / LightLaneTuning.TILE_MARK_STEP);
 
-        return ((Math.abs(step - Math.round(step)) < LightLaneModels.WALL_MIN) && (z >= z0) && ((z + LightLaneTuning.TILE_MARK_WIDTH) <= z1));
+        return ((Math.abs(step - Math.round(step)) < LightLaneModels.EPSILON) && (z >= z0) && ((z + LightLaneTuning.TILE_MARK_WIDTH) <= z1));
     }
 
     // The cross marks of a tile's top between z0 and z1 (tile coordinates): opaque painted strips of TILE_MARK_WIDTH in
@@ -287,17 +298,19 @@ class LightLaneModels {
     // request: no dark faces one hardly sees): the bar's four long edges and the feet's front edges in DANGER.
     static _hurdle(lineSize) {
         const color = LightLaneTuning.COLOR;
+        const shape = LightLaneTuning.SHAPES.HURDLE;
+        const w     = shape.halfWidth;
         const d     = (LightLaneTuning.OBSTACLES.H.length / 2);
         const b     = new LightLaneObjectBuilder();
         for (const side of [-1, 1]) {
-            b.line([side * 0.85, 0, -d], [side * 0.85, 0.65, -d], lineSize, color.DANGER, [side, 0, -1]);
+            b.line([side * w, 0, -d], [side * w, shape.barBottom, -d], lineSize, color.DANGER, [side, 0, -1]);
         }
-        for (const [y, up] of [[0.90, 1], [0.65, -1]]) {
-            b.line([-0.85, y, -d], [0.85, y, -d], lineSize, color.DANGER, [0, up, -1]);
-            b.line([-0.85, y, d], [0.85, y, d], lineSize, color.DANGER, [0, up, 1]);
+        for (const [y, up] of [[shape.barTop, 1], [shape.barBottom, -1]]) {
+            b.line([-w, y, -d], [w, y, -d], lineSize, color.DANGER, [0, up, -1]);
+            b.line([-w, y, d], [w, y, d], lineSize, color.DANGER, [0, up, 1]);
         }
         // No way under it: a red cross between its feet, under the bar.
-        LightLaneModels._cross(b, -0.70, 0.08, 0.70, 0.58, -d, lineSize);
+        LightLaneModels._cross(b, ...shape.cross, -d, lineSize);
 
         return b.data();
     }
@@ -306,21 +319,24 @@ class LightLaneModels {
     // sees): its four long edges in DANGER; posts 0.08 × 3.0 at x ±1.02 in LINE_DIM.
     static _gate(lineSize) {
         const color = LightLaneTuning.COLOR;
+        const shape = LightLaneTuning.SHAPES.GATE;
+        const post  = (shape.postSize / 2);
+        const w     = shape.beamHalfWidth;
         const d     = (LightLaneTuning.OBSTACLES.P.length / 2);
         const b     = new LightLaneObjectBuilder();
         for (const side of [-1, 1]) {
-            b.box([(side * 1.02) - 0.04, 0, -0.04], [(side * 1.02) + 0.04, 3.0, 0.04], {top: color.LINE_DIM, side: color.LINE_DIM, bottom: null}, true);
+            const x = (side * shape.postX);
+            b.box([(x - post), 0, -post], [(x + post), shape.postHeight, post], {top: color.LINE_DIM, side: color.LINE_DIM, bottom: null}, true);
         }
-        for (const [y, up] of [[1.05, -1], [1.45, 1]]) {
-            b.line([-0.95, y, -d], [0.95, y, -d], lineSize, color.DANGER, [0, up, -1]);
-            b.line([-0.95, y, d], [0.95, y, d], lineSize, color.DANGER, [0, up, 1]);
+        for (const [y, up] of [[shape.beamBottom, -1], [shape.beamTop, 1]]) {
+            b.line([-w, y, -d], [w, y, -d], lineSize, color.DANGER, [0, up, -1]);
+            b.line([-w, y, d], [w, y, d], lineSize, color.DANGER, [0, up, 1]);
         }
         // No way over it: a red cross between its posts, above the beam.
-        LightLaneModels._cross(b, -0.85, 1.60, 0.85, 2.85, -d, lineSize);
+        LightLaneModels._cross(b, ...shape.cross, -d, lineSize);
 
         return b.data();
     }
-
 
     // A red cross (LETHAL, glowing) in the plane z, over the rectangle (x0, y0) – (x1, y1): the way that is closed
     // (user request: one did not see where an obstacle cannot be passed).
@@ -334,9 +350,11 @@ class LightLaneModels {
     // front face, orange crosses along the side crossSide (−1 left, +1 right).
     static _block(length, lineSize, crossSide) {
         const color = LightLaneTuning.COLOR;
-        const w     = 0.90;
-        const h     = 3.20;
-        const c     = 0.15;
+        const shape = LightLaneTuning.SHAPES.BLOCK;
+        const w     = shape.halfWidth;
+        const h     = shape.height;
+        const c     = shape.corner;
+        const m     = shape.crossMargin;
         const l     = (length / 2);
         const o     = (LightLaneTuning.LINE_OUTSET + (lineSize / 2));
         const b     = new LightLaneObjectBuilder();
@@ -348,6 +366,10 @@ class LightLaneModels {
             line([w + o, y, -l + c], [w + o, y, l - c], [1, up, 0]);
             line([-w + c, y, -l - o], [w - c, y, -l - o], [0, up, -1]);
             line([-w + c, y, l + o], [w - c, y, l + o], [0, up, 1]);
+            // The corners cut at 45° (art § 5.2): the outline goes on round them.
+            for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+                line([sx * (w + o), y, sz * (l - c)], [sx * (w - c), y, sz * (l + o)], [sx, up, sz]);
+            }
         }
         for (const [z, toward] of [[-l - o, -1], [l + o, 1]]) {
             line([-w + c, 0, z], [-w + c, h, z], [0, 0, toward]);
@@ -355,7 +377,7 @@ class LightLaneModels {
         }
         // Neither over nor under it: its front cross in red. Its sides cannot be entered either (a stumble): orange
         // crosses along them, about square (user request: crosses rather than full faces).
-        LightLaneModels._cross(b, (-w + c), 0.1, (w - c), (h - 0.1), -l, lineSize);
+        LightLaneModels._cross(b, (-w + c), m, (w - c), (h - m), -l, lineSize);
         const count = Math.max(1, Math.round((2 * (l - c)) / h));
         const step  = ((2 * (l - c)) / count);
         // The crosses as lines with a volume, so the neon shows whatever the angle (user request), on the side the
@@ -363,10 +385,10 @@ class LightLaneModels {
         // seen through the block.
         const x = (crossSide * (w + o));
         for (let k = 0; k < count; k++) {
-            const z0 = (-l + c + (k * step) + LightLaneModels.SIDE_CROSS_INSET);
-            const z1 = (-l + c + ((k + 1) * step) - LightLaneModels.SIDE_CROSS_INSET);
-            line([x, 0.1, z0], [x, h - 0.1, z1], [crossSide, 0, 0]);
-            line([x, 0.1, z1], [x, h - 0.1, z0], [crossSide, 0, 0]);
+            const z0 = (-l + c + (k * step) + shape.sideCrossInset);
+            const z1 = (-l + c + ((k + 1) * step) - shape.sideCrossInset);
+            line([x, m, z0], [x, h - m, z1], [crossSide, 0, 0]);
+            line([x, m, z1], [x, h - m, z0], [crossSide, 0, 0]);
         }
 
         return b.data();
@@ -404,10 +426,10 @@ class LightLaneModels {
         return b.data();
     }
 
-    // An octahedron 0.22 wide, 0.32 high, its bottom at the origin, glowing COIN.
+    // An octahedron (SHAPES.COIN), its bottom at the origin, glowing COIN.
     static _coin() {
-        const hw     = 0.11;
-        const hh     = 0.16;
+        const hw     = LightLaneTuning.SHAPES.COIN.halfWidth;
+        const hh     = LightLaneTuning.SHAPES.COIN.halfHeight;
         const top    = [0, 2 * hh, 0];
         const bottom = [0, 0, 0];
         const ring   = [[hw, hh, 0], [0, hh, hw], [-hw, hh, 0], [0, hh, -hw]];
@@ -477,20 +499,22 @@ class LightLaneModels {
     }
 
     // The line along the right edge of the rightmost lane, alone.
-    static _tileEdge(lineSize) {
-        const w = (LightLaneTuning.LANE_WIDTH / 2);
-        const l = (LightLaneTuning.TILE_LENGTH / 2);
-        const h = LightLaneTuning.TILE_THICKNESS;
-        const b = new LightLaneObjectBuilder();
-        b.line([w, h, -l], [w, h, l], lineSize, LightLaneTuning.COLOR.LINE_DIM, null, true);
+    // The track's right edge line along a tile; cut at the hole of a gap in the rightmost lane (no rail over the void).
+    static _tileEdge(lineSize, gap) {
+        const w     = (LightLaneTuning.LANE_WIDTH / 2);
+        const l     = (LightLaneTuning.TILE_LENGTH / 2);
+        const h     = LightLaneTuning.TILE_THICKNESS;
+        const b     = new LightLaneObjectBuilder();
+        const spans = ((gap === null) ? [[-l, l]] : [[-l, LightLaneModels._hole(gap)[0]], [LightLaneModels._hole(gap)[1], l]]);
+        for (const [z0, z1] of spans) {
+            b.line([w, h, z0], [w, h, z1], lineSize, LightLaneTuning.COLOR.LINE_DIM, null, true);
+        }
 
         return b.data();
     }
 }
 
 LightLaneModels.ASSETS     = './assets/lightLane/';
-// The crosses along a block's sides stop this short of each other.
-LightLaneModels.SIDE_CROSS_INSET = 0.15;
 LightLaneModels._lod       = false;
 // The codes of the objects built here (load()).
 LightLaneModels.CODES      = [];
@@ -503,8 +527,8 @@ LightLaneModels.LIT_LEVELS = Object.freeze({
     PF: Object.freeze([null, LightLaneTuning.TILE_TOP_CELL]),
 });
 LightLaneModels.TILE       = 'tile';
-// A hole's side wall shorter than this is not built (holes ending at the same z).
-LightLaneModels.WALL_MIN   = 0.01;
+// Lengths closer than this are equal (m): a hole's side wall shorter is not built, a floor mark is found at its z.
+LightLaneModels.EPSILON    = 0.01;
 LightLaneModels.TILE_EDGE  = 'tileEdge';
 LightLaneModels.FOG        = 'fog';
 // A whole row of 3 lanes in one tile (user request: no separation between lanes but at a gap).

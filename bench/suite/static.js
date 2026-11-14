@@ -1,16 +1,20 @@
 /**
  * Static suite: the bootstrap definition against the disk. Every file served from website/ is declared in
  * js/libBootstrap.json (the shell precached by the service worker aside), every declared file exists once, and every
- * class is declared after the class it extends (a file before those that use it at load time).
+ * class is declared after the class it extends (a file before those that use it at load time). Every translation in
+ * the 4 languages, with the same placeholders.
  */
 
 const fs   = require('fs');
 const path = require('path');
+const vm   = require('vm');
 
-const WEBSITE_DIR = path.resolve(__dirname, '..', '..', 'website');
-const DEFINITION  = 'js/libBootstrap.json';
+const WEBSITE_DIR  = path.resolve(__dirname, '..', '..', 'website');
+const DEFINITION   = 'js/libBootstrap.json';
+const TRANSLATIONS = 'js/lightLane/lightLaneTranslations.js';
+const LANGUAGES    = ['en', 'fr', 'it', 'es'];
 // Served without a declaration: the shell precached by the service worker, the icons, the definition, the licences.
-const UNDECLARED  = [
+const UNDECLARED   = [
     /^index\.html$/, /^manifest\.webmanifest$/, /^appServiceWorker\.js$/, /^ping\.json$/, /^favicon\.ico$/,
     /^apple-touch-icon\.png$/, /^browserconfig\.xml$/, /^icon\//, /^css\/main\.css$/, /^js\/webapp\/appBootstrap\.js$/,
     /^js\/libBootstrap\.json$/, /\.md$/
@@ -29,8 +33,29 @@ class BootstrapBench {
         this._list('declared but missing', files.filter((file) => !fs.existsSync(path.join(WEBSITE_DIR, file))));
         this._list('declared twice', files.filter((file, index) => (files.indexOf(file) !== index)));
         this._list('classes declared before the class they extend', this._lateParents(files.filter((file) => file.endsWith('.js'))));
-        
+        this._list('translations missing a language or a placeholder', this._translationGaps());
+
         return this._failures;
+    }
+
+    // Every code of the catalogue in each language, with the same {placeholders} in all of them.
+    _translationGaps() {
+        const ctx = vm.createContext({});
+        vm.runInContext(this._read(TRANSLATIONS) + '\nthis.catalog = LightLaneTranslations.CATALOG;', ctx, {filename: TRANSLATIONS});
+        const gaps = [];
+        for (const [code, texts] of Object.entries(ctx.catalog)) {
+            const placeholders = (text) => (text.match(/\{\w+\}/g) ?? []).sort().join(',');
+            const missing      = LANGUAGES.filter((language) => (typeof texts[language] !== 'string') || (texts[language] === ''));
+            if (missing.length > 0) {
+                gaps.push(code + ': no ' + missing.join(', '));
+                continue;
+            }
+            if (LANGUAGES.some((language) => (placeholders(texts[language]) !== placeholders(texts[LANGUAGES[0]])))) {
+                gaps.push(code + ': placeholders differ');
+            }
+        }
+
+        return gaps;
     }
 
     _lateParents(scripts) {

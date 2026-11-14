@@ -18,14 +18,10 @@ class LightLaneScores {
         return this;
     }
 
-    isStored() {
-        return (this._database !== null);
-    }
-
     /**
-     * @returns {Promise<{id: int, score: int, coins: int, distance: int, time: (int|undefined), date: string}[]>} - time
-     *          (seconds played) absent from the runs saved before it was kept best first, the oldest
-     *          first between equal scores
+     * @returns {Promise<{id: int, score: int, coins: int, distance: int, time: (int|undefined), date: string}[]>} the
+     *          10 best, best first, the oldest first between equal scores; time (seconds played) is absent from the
+     *          runs saved before it was kept
      */
     async list() {
         const records = ((this._database !== null) ? await this._database.getAll(LightLaneDatabaseSchema.SCORE) : [...this._memory]);
@@ -50,14 +46,21 @@ class LightLaneScores {
             this._memory = [...best, {...record, id: id}].sort(LightLaneScores._compare).slice(0, LightLaneScores.KEPT);
             return {rank: rank, id: id};
         }
-        const id      = await this._database.insert(LightLaneDatabaseSchema.SCORE, record);
+        const id = await this._database.insert(LightLaneDatabaseSchema.SCORE, record);
+        // The run is saved: a failure to drop the surplus only leaves more than 10 records (list() still gives the 10
+        // best; the next run tries again), never a run saved but shown without its rank.
+        await this._dropSurplus().catch((error) => console.warn('LightLaneScores - surplus not dropped: ' + error.message));
+
+        return {rank: rank, id: id};
+    }
+
+    // The records past the 10 best go.
+    async _dropSurplus() {
         const ordered = (await this._database.getAll(LightLaneDatabaseSchema.SCORE)).sort(LightLaneScores._compare);
         const dropped = ordered.slice(LightLaneScores.KEPT).map((other) => ({storeName: LightLaneDatabaseSchema.SCORE, key: other.id}));
         if (dropped.length > 0) {
             await this._database.deleteMulti(dropped);
         }
-
-        return {rank: rank, id: id};
     }
 
     async clear() {

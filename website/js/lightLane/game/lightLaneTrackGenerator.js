@@ -53,7 +53,7 @@ class LightLaneTrackGenerator {
         let kept = 0;
         for (let i = 0; i < this._active.length; i++) {
             const entity = this._active[i];
-            if (Math.max(entity.getEnd(), entity.z) < behind) {
+            if (entity.getEnd() < behind) {
                 this._pool.push(entity.reset());
                 continue;
             }
@@ -92,12 +92,12 @@ class LightLaneTrackGenerator {
         let lanes     = null;
         let longest   = 0;
         if (pattern !== null) {
-            lanes = ((pattern.mirror) ? LightLanePatterns.mirror(pattern.pattern.lanes) : pattern.pattern.lanes);
-            z     = LightLaneTrackGenerator._gapAligned(z, lanes, pattern.pattern.corridor);
+            lanes   = ((pattern.mirror) ? LightLanePatterns.mirror(pattern.pattern.lanes) : pattern.pattern.lanes);
+            z       = LightLaneTrackGenerator._gapAligned(z, lanes, pattern.pattern.corridor);
             longest = Math.max(...lanes.map((code) => ((code === '.') ? 0 : LightLaneTuning.OBSTACLES[code].length)));
         }
-        let gap = (LightLaneTrackGenerator._snap((LightLaneTuning.ROW_GAPS[Math.min(tier, LightLaneTuning.ROW_GAPS.length - 1)]
-            + this._random.between(0, LightLaneTuning.ROW_GAP_JITTER)) * speed));
+        const rowGap = LightLaneTuning.ROW_GAPS[Math.min(tier, (LightLaneTuning.ROW_GAPS.length - 1))];
+        let gap      = LightLaneTrackGenerator._snap((rowGap + this._random.between(0, LightLaneTuning.ROW_GAP_JITTER)) * speed);
         if (longest > (gap - (LightLaneTuning.LONG_ELEMENT_MARGIN * speed))) {
             gap = LightLaneTrackGenerator._snap(longest + (LightLaneTuning.LONG_ELEMENT_MARGIN * speed));
         }
@@ -138,7 +138,7 @@ class LightLaneTrackGenerator {
                 candidates.push(pattern);
             }
         }
-        const window  = Math.max(1, Math.min(LightLaneTrackGenerator.RECENT_MAX, (candidates.length - LightLaneTrackGenerator.RECENT_SPARE)));
+        const window  = Math.max(1, Math.min(LightLaneTuning.PATTERN_RECENT_MAX, (candidates.length - LightLaneTuning.PATTERN_RECENT_SPARE)));
         const recent  = this._recent.slice(-window);
         const allowed = candidates.filter((pattern) => !recent.includes(pattern.id));
         const total   = allowed.reduce((sum, pattern) => (sum + pattern.weight), 0);
@@ -152,11 +152,11 @@ class LightLaneTrackGenerator {
             }
         }
         this._recent.push(chosen.id);
-        if (this._recent.length > LightLaneTrackGenerator.RECENT_MAX) {
+        if (this._recent.length > LightLaneTuning.PATTERN_RECENT_MAX) {
             this._recent.shift();
         }
 
-        return {pattern: chosen, mirror: this._random.chance(LightLaneTrackGenerator.MIRROR_CHANCE), offset: 0};
+        return {pattern: chosen, mirror: this._random.chance(LightLaneTuning.PATTERN_MIRROR_CHANCE), offset: 0};
     }
 
     _coins(placed, lanes, z, speed, nextZ) {
@@ -182,9 +182,9 @@ class LightLaneTrackGenerator {
             return;
         }
         // The free lane nearest the centre, the centre first.
-        const free = [1, 0, 2].find((i) => (lanes[i] === '.'));
+        const free = LightLaneTrackGenerator.CENTRE_FIRST.find((i) => (lanes[i] === '.'));
         if (free === undefined) {
-            const gate = [1, 0, 2].find((i) => (lanes[i] === 'P'));
+            const gate = LightLaneTrackGenerator.CENTRE_FIRST.find((i) => (lanes[i] === 'P'));
             if (gate !== undefined) {
                 this._gateCoins(laneOf(gate), z);
             }
@@ -221,8 +221,9 @@ class LightLaneTrackGenerator {
         const T       = LightLaneTuning.JUMP_TIME;
         const H       = LightLaneTuning.JUMP_HEIGHT;
         const depth   = ((2 * LightLaneTuning.RUNNER_HALF_DEPTH) + (spec.z1 - spec.z0));
-        const early   = (LightLaneTrackGenerator.HURDLE_CLEAR_UNTIL * T - (depth / speed));
-        const late    = (LightLaneTrackGenerator.HURDLE_CLEAR_FROM * T);
+        const [from, until] = LightLaneTrackGenerator.hurdleClearWindow();
+        const early   = ((until * T) - (depth / speed));
+        const late    = (from * T);
         const contact = ((z + spec.z0) - LightLaneTuning.RUNNER_HALF_DEPTH);
         const start   = (contact - (speed * ((early + late) / 2)));
         for (let k = 0; k < LightLaneTuning.COIN_ARC_COUNT; k++) {
@@ -254,14 +255,23 @@ class LightLaneTrackGenerator {
         return (((Math.ceil(((z + offset) - spec.holeFrom) / tile) * tile) + spec.holeFrom) - offset);
     }
 
+    /**
+     * The share of a normal jump (t / T) during which the feet are above the hurdle's top: 4H·u(1 − u) ≥ y1, so u in
+     * [(1 − √(1 − y1 / H)) / 2, 1 − that] (gameplay § 4; 0.173 to 0.827 with the start values). Follows JUMP_HEIGHT and
+     * the hurdle's height when they are tuned.
+     *
+     * @returns {number[]} [from, until]
+     */
+    static hurdleClearWindow() {
+        const from = ((1 - Math.sqrt(1 - (LightLaneTuning.OBSTACLES.H.y1 / LightLaneTuning.JUMP_HEIGHT))) / 2);
+
+        return [from, (1 - from)];
+    }
+
     static _snap(value) {
         return (Math.round(value / LightLaneTuning.CELL) * LightLaneTuning.CELL);
     }
 }
 
-LightLaneTrackGenerator.RECENT_MAX    = 3;
-LightLaneTrackGenerator.RECENT_SPARE  = 2;
-LightLaneTrackGenerator.MIRROR_CHANCE = 0.5;
-// A normal jump clears a hurdle's 0.80 m for t / T in [0.173, 0.827] (gameplay § 4).
-LightLaneTrackGenerator.HURDLE_CLEAR_FROM  = 0.173;
-LightLaneTrackGenerator.HURDLE_CLEAR_UNTIL = 0.827;
+// The lanes of a 3-lane row (indices), the centre first.
+LightLaneTrackGenerator.CENTRE_FIRST = Object.freeze([1, 0, 2]);

@@ -12,10 +12,10 @@ class LightLaneEntity {
         this.x      = 0;        // centre across
         this.y      = 0;        // a coin's height; 0 for an obstacle
         this.z      = 0;        // front face (an obstacle) or centre (a coin)
-        this.length = 0;
-        this.box    = {x0: 0, x1: 0, y0: 0, y1: 0, z0: 0, z1: 0};
-        this.hit    = false;    // its collision has been dealt with
-        this.taken  = false;    // a coin picked up
+        this.length  = 0;
+        this.box     = {x0: 0, x1: 0, y0: 0, y1: 0, z0: 0, z1: 0};
+        this.hit     = false;   // its collision has been dealt with
+        this.taken   = false;   // a coin picked up
         this.takenAt = 0;       // run time of the pick-up (the presentation's fade)
         this.takenDz = 0;       // the coin's z less the runner's at the pick-up (it then goes on with the runner)
     }

@@ -15,21 +15,28 @@ function run() {
     const step    = Tuning.STEP_SECONDS;
     const world   = {laneExists: (lane) => (Math.abs(lane) <= 1), standingCutsGate: () => false};
     const events  = new Events();
+    // Either side of ORDER_KEEP_TIME (0.20 s, tech § 8): kept, dropped.
+    const KEPT    = 0.15;
+    const DROPPED = 0.25;
     const steps   = (seconds, r) => {
         for (let i = 0; i < Math.round(seconds / step); i++) {
             r.step(step, null, events);
         }
     };
 
-    // A second lane order during a change: it waits, then runs.
-    let r = new Runner(world);
+    // A second lane order during a change: it waits, then runs (5 lanes: two lefts end two lanes away, which the
+    // first order alone or an order dropped would not).
+    const wide = {laneExists: (lane) => (Math.abs(lane) <= 2), standingCutsGate: () => false};
+    let r = new Runner(wide);
     r.step(step, [Sampler.LEFT], events);
-    r.step(step, [Sampler.RIGHT], events);
-    steps(Tuning.LANE_CHANGE_TIME * 2 + 0.05, r);
-    c.check('lane order during a change: run after it', ((r.lane === 0) && (r.x === 0)), 'lane ' + r.lane);
+    r.step(step, [Sampler.LEFT], events);
+    steps(Tuning.LANE_CHANGE_TIME - (2 * step), r);
+    const firstLane = r.lane;
+    steps(Tuning.LANE_CHANGE_TIME + 0.05, r);
+    c.check('lane order during a change: run after it', ((firstLane === -1) && (r.lane === -2)), 'lanes ' + firstLane + ', ' + r.lane);
 
     // The latest replaces the older one (5 lanes: neither order is refused).
-    r = new Runner({laneExists: (lane) => (Math.abs(lane) <= 2), standingCutsGate: () => false});
+    r = new Runner(wide);
     r.step(step, [Sampler.LEFT], events);
     r.step(step, [Sampler.RIGHT], events);
     r.step(step, [Sampler.LEFT], events);
@@ -39,18 +46,18 @@ function run() {
     // A jump asked in the air shortly before landing: it runs on landing.
     r = new Runner(world);
     r.step(step, [Sampler.JUMP], events);
-    steps(Tuning.JUMP_TIME - 0.1, r);
+    steps(Tuning.JUMP_TIME - KEPT, r);
     r.step(step, [Sampler.JUMP], events);
-    steps(0.12, r);
-    c.check('jump asked ' + 0.1 + ' s before landing: jumps again', r.isJumping());
+    steps(KEPT + 0.02, r);
+    c.check('jump asked ' + KEPT + ' s before landing: jumps again', r.isJumping());
 
     // Asked too early: dropped after ORDER_KEEP_TIME.
     r = new Runner(world);
     r.step(step, [Sampler.JUMP], events);
-    steps(Tuning.JUMP_TIME - 0.35, r);
+    steps(Tuning.JUMP_TIME - DROPPED, r);
     r.step(step, [Sampler.JUMP], events);
-    steps(0.4, r);
-    c.check('jump asked ' + 0.35 + ' s before landing: dropped', !r.isJumping());
+    steps(DROPPED + 0.05, r);
+    c.check('jump asked ' + DROPPED + ' s before landing: dropped', !r.isJumping());
 
     // A slide in the air is never queued: it is a fast drop.
     r = new Runner(world);

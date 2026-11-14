@@ -12,7 +12,8 @@ const SOURCE = path.resolve(__dirname, '..', '..', 'website', 'js', 'lightLane',
 class TestModeBench {
     constructor() {
         this._failures = 0;
-        this._ctx      = vm.createContext({console: {warn: () => {}}, URLSearchParams, Number, Object, Error});
+        this._ctx      = vm.createContext({console: {warn: () => {}}, URLSearchParams, Number, Object, Error,
+            LightLaneCommandSampler: {LEFT: 'left', RIGHT: 'right', JUMP: 'jump', SLIDE: 'slide'}});
         vm.runInContext(fs.readFileSync(SOURCE, 'utf8'), this._ctx, {filename: 'lightLaneTestMode.js'});
         this._TestMode = vm.runInContext('LightLaneTestMode', this._ctx);
     }

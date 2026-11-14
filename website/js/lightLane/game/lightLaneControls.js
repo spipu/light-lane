@@ -4,7 +4,7 @@
  * is offered off touch-only devices, the touch controls on them, the gamepad once detected. The player's bindings
  * come from LightLaneSettings (keyboard.* / pad.*).
  *
- * The touch controls are the swipes (AppInputSwipe) and one pause button in the top right corner. Every reader gives
+ * The touch controls are the swipes (AppInputSwipe) and one pause button in the top left corner. Every reader gives
  * the state of the moment, never an edge: LightLaneCommandSampler derives the orders from the previous state.
  */
 class LightLaneControls {
@@ -102,8 +102,9 @@ class LightLaneControls {
         out.x = 0;
         out.y = 0;
         if (this._device === LightLaneSettings.DEVICE_GAMEPAD) {
+            // readSlot keeps the hardware convention (right and down positive): y turned to up positive.
             out.x = this._gamepad.readSlot('leftRight');
-            out.y = this._gamepad.readSlot('jumpSlide');
+            out.y = -this._gamepad.readSlot('jumpSlide');
         }
 
         return out;

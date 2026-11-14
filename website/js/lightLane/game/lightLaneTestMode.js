@@ -32,9 +32,45 @@ class LightLaneTestMode {
         }
     }
 
-    // From the page's address.
+    /**
+     * From the page's address. A bad parameter is told in the console and the game starts without the test mode (it
+     * must not stop the application).
+     */
     static fromLocation() {
-        return new LightLaneTestMode(window.location.hostname, window.location.search);
+        try {
+            return new LightLaneTestMode(window.location.hostname, window.location.search).validate();
+        } catch (error) {
+            console.error(error.message);
+
+            return new LightLaneTestMode(window.location.hostname, '');
+        }
+    }
+
+    /**
+     * Against what the game has today: a tier of the table, written rows of known 3-lane patterns without enemies (the
+     * 5 lanes and the enemies come with plan steps 10 and 11). The robot (`pilot`) does not exist yet: said once.
+     *
+     * @returns {LightLaneTestMode} this
+     * @throws {Error} on an option the game cannot play
+     */
+    validate() {
+        if ((this._tier !== null) && ((this._tier < 0) || (this._tier >= LightLaneTuning.TIERS.length))) {
+            throw new Error('LightLaneTestMode - tier ' + this._tier + ' out of 0..' + (LightLaneTuning.TIERS.length - 1));
+        }
+        for (const row of (this._track ?? [])) {
+            const pattern = LightLanePatterns.get(row.id);
+            if (pattern === undefined) {
+                throw new Error('LightLaneTestMode - unknown pattern ' + row.id);
+            }
+            if ((row.offset !== 0) || (pattern.lanes.length !== 3) || pattern.lanes.some((code) => LightLanePatterns.ENEMIES.includes(code))) {
+                throw new Error('LightLaneTestMode - pattern ' + row.id + ' needs the 5 lanes or the enemies (not there yet)');
+            }
+        }
+        if (this._pilot) {
+            console.warn('LightLaneTestMode - pilot: the robot is not there yet (plan step 11), the option does nothing');
+        }
+
+        return this;
     }
 
     isActive() {
@@ -143,7 +179,7 @@ class LightLaneTestMode {
     // "<time>:<L|R|J|S>".
     static _order(text) {
         const [time, letter] = text.split(':');
-        const order = LightLaneTestMode.ORDERS[letter];
+        const order = ((letter in LightLaneTestMode.ORDERS) ? LightLaneCommandSampler[LightLaneTestMode.ORDERS[letter]] : undefined);
         const at    = Number(time);
         if ((order === undefined) || !Number.isFinite(at)) {
             throw new Error('LightLaneTestMode - bad script entry ' + text);
@@ -164,5 +200,5 @@ class LightLaneTestMode {
 
 LightLaneTestMode.PARAMETER   = 'test';
 LightLaneTestMode.LOCAL_HOSTS = Object.freeze(['localhost', '127.0.0.1']);
-// Script letters → orders (LightLaneCommandSampler).
-LightLaneTestMode.ORDERS      = Object.freeze({L: 'left', R: 'right', J: 'jump', S: 'slide'});
+// Script letters → the names of the orders' constants (LightLaneCommandSampler, read when a script is parsed).
+LightLaneTestMode.ORDERS      = Object.freeze({L: 'LEFT', R: 'RIGHT', J: 'JUMP', S: 'SLIDE'});

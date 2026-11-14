@@ -3,7 +3,8 @@
  *
  * Records:
  *  - setting: {id, key, value}
- *  - score: {id, score, coins, distance, date (ISO)} — the 10 best runs, nothing else of a run is kept
+ *  - score: {id, score, coins, distance, time (seconds played; absent from the runs saved before it), date (ISO)} —
+ *    the 10 best runs, nothing else of a run is kept
  */
 class LightLaneDatabaseSchema {
     /**

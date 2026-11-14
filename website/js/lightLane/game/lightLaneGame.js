@@ -88,7 +88,7 @@ class LightLaneGame {
             seed:   (test.getSeed() ?? LightLaneRandom.freshSeed()),
             track:  test.getTrack(),
             shield: test.isShield(),
-            speed:  (test.getSpeed() ?? undefined)
+            speed:  test.getSpeed()
         });
         this._overPending = false;
         this._presentation.newRun();
@@ -99,6 +99,9 @@ class LightLaneGame {
     // The scene, the pause menu, the listeners and the controls go: the menus come back.
     _teardown() {
         this._running = false;
+        if (window[LightLaneGame.TEST_HANDLE] === this) {
+            delete window[LightLaneGame.TEST_HANDLE];
+        }
         document.removeEventListener('visibilitychange', this._onVisibility);
         if (this._pauseModal !== null) {
             this._closePause();
@@ -173,6 +176,8 @@ class LightLaneGame {
         this._pauseDisplay.destroy();
         this._pauseModal   = null;
         this._pauseDisplay = null;
+        // The language may have changed in the pause's options.
+        this._presentation.getHud().refreshTexts();
     }
 
     // A hidden page (another tab, the phone locked) pauses the run (tech § 3.1).
@@ -187,14 +192,24 @@ class LightLaneGame {
     // The run into the 10 best scores (if it enters them), then the modal with its rank (gameplay § 12).
     _gameOver() {
         const simulation = this._simulation;
-        const run        = {score: simulation.getScore().getScore(), coins: simulation.getScore().getCoins(), distance: Math.floor(simulation.getDistance()),
-            time: Math.floor(simulation.getRunTime())};
+        const run        = {
+            score:    simulation.getScore().getScore(),
+            coins:    simulation.getScore().getCoins(),
+            distance: Math.floor(simulation.getDistance()),
+            time:     Math.floor(simulation.getRunTime())
+        };
+        const saved      = lightLaneScores.add(run).catch((error) => LightLaneGame._notSaved(error));
+
         this._overPending = true;
         this._controls.setVirtualPadVisible(false);
-        lightLaneScores.add(run).catch((error) => {
-            console.warn('LightLaneGame - score not saved: ' + error.message);
-            return null;
-        }).then((entry) => this._guard(this._showGameOver, {run: run, entry: entry}));
+        saved.then((entry) => this._guard(this._showGameOver, {run: run, entry: entry}));
+    }
+
+    // A storage failure: the run is shown without a rank.
+    static _notSaved(error) {
+        console.warn('LightLaneGame - score not saved: ' + error.message);
+
+        return null;
     }
 
     _showGameOver(result) {

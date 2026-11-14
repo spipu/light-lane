@@ -99,6 +99,17 @@ class LightLaneRunner {
     }
 
     /**
+     * Dying in a gap: the simulation drives its fall.
+     *
+     * @param {number} dy - m down
+     */
+    drop(dy) {
+        this.y -= dy;
+
+        return this;
+    }
+
+    /**
      * @returns {number} the share of the difficulty's speed it runs at (a stumble slows it, then ramps back)
      */
     getSpeedFactor() {

@@ -237,8 +237,9 @@ class LightLanePresentation {
                     this._restart = true;
                     break;
                 case LightLaneEvents.STUMBLE:
+                    // Shown once on the ground: a stumble in the air keeps the jump (or slide) clip where it is.
                     this._stumbleUntil = (this._time + this._model.getClip(LightLanePresentation.CLIP_STUMBLE).getDuration());
-                    this._restart      = true;
+                    this._restart      = !(runner.isJumping() || runner.isSliding());
                     this._effects.shake(LightLaneTuning.STUMBLE_SHAKE);
                     break;
                 case LightLaneEvents.DEATH:
@@ -273,7 +274,7 @@ class LightLanePresentation {
         this._setFragile(runner.isFragile() && ((Math.floor(this._time * LightLaneTuning.FRAGILE_BLINK_HZ * 2) % 2) === 0));
         // The lean of a lane change, over the run clip.
         const lean = (LightLanePresentation.LEAN_SIGN * runner.getLaneSide() * LightLaneTuning.RUNNER_LEAN);
-        this._facing[2] += ((lean - this._facing[2]) * Math.min(1, (dt / LightLaneTuning.RUNNER_LEAN_TIME)));
+        this._facing[2] += ((lean - this._facing[2]) * LightLaneCamera.ease(dt, LightLaneTuning.RUNNER_LEAN_TIME));
         this._runner.place([simulation.getX(), simulation.getY(), simulation.getZ()], this._facing);
         this._events.length = 0;
         this._runner.update(dt, this._events);
@@ -284,7 +285,7 @@ class LightLanePresentation {
         if (runner.isSliding()) {
             this._playClip(LightLanePresentation.CLIP_SLIDE, fade, false, 1);
         } else if (runner.isJumping()) {
-            this._playClip(LightLanePresentation.CLIP_JUMP, fade, false, ((runner.boots) ? LightLanePresentation.JUMP_HIGH_PACE : 1));
+            this._playClip(LightLanePresentation.CLIP_JUMP, fade, false, ((runner.boots) ? LightLaneTuning.JUMP_HIGH_PACE : 1));
         } else if (this._time < this._stumbleUntil) {
             this._playClip(LightLanePresentation.CLIP_STUMBLE, fade, false, 1);
         } else {
@@ -333,9 +334,9 @@ class LightLanePresentation {
         // atan(y / d) under the horizon (a higher camera, in a jump, sees it lower) and atan(−x / d) aside; its middle
         // straight ahead (the sky starts its texture at yaw 0, half a span to the left).
         const toDegrees = (LightLanePresentation.HALF_TURN / Math.PI);
-        engine.viewPitch = (LightLaneTuning.CAMERA_PITCH + (Math.atan(this._camera.getY() / LightLaneTuning.SKY_DISTANCE) * toDegrees));
+        engine.viewPitch = (this._camera.getPitch() + (Math.atan(this._camera.getY() / LightLaneTuning.SKY_DISTANCE) * toDegrees));
         engine.viewYaw   = ((LightLaneTuning.SKY_SPAN / 2) + (Math.atan(this._camera.getX() / LightLaneTuning.SKY_DISTANCE) * toDegrees));
-        engine.viewRoll  = (LightLanePresentation.SKY_ROLL_SIGN * this._camera.getRoll());
+        engine.viewRoll  = this._camera.getRoll();
         const runner = this._simulation.getRunner();
         this._light.position[0] = runner.x;
         this._light.position[1] = (runner.y + (runner.getHeight() / 2));
@@ -372,7 +373,7 @@ class LightLanePresentation {
             if (slot.row !== row) {
                 slot.row  = row;
                 const gaps = lanes.map((lane) => track.gapIn(lane, start));
-                const kind = (i) => ((i < 0) || (i >= lanes.length)) ? null : ((gaps[i] !== null) ? gaps[i] : LightLaneModels.TILE);
+                const kind = (i) => (((i < 0) || (i >= lanes.length)) ? null : ((gaps[i] !== null) ? gaps[i] : LightLaneModels.TILE));
                 slot.gaps  = gaps.some((gap) => (gap !== null));
                 lanes.forEach((lane, i) => {
                     // A holed tile has walls only where a neighbour's top flanks its hole.
@@ -380,12 +381,14 @@ class LightLanePresentation {
                     slot.tiles[i].setObject(this._id(this._tileVariant(slot.codes[i], slot.lit)));
                     slot.tiles[i].placeAt((lane * LightLaneTuning.LANE_WIDTH), y, centre);
                 });
+                const right = gaps[lanes.length - 1];
+                slot.edge.setObject(this._id((right !== null) ? LightLaneModels.tileEdgeCode(right) : LightLaneModels.TILE_EDGE));
                 slot.edge.placeAt((lanes[lanes.length - 1] * LightLaneTuning.LANE_WIDTH), y, centre);
                 slot.whole.setObject(this._id(this._tileVariant(LightLaneModels.ROW3, slot.lit)));
                 slot.whole.placeAt(0, y, centre);
             }
             // Under the runner's light (art § 2), by half tile (a mark every half tile shows it as a row): fine where the
-            // light falls and the camera sees, one coarser row after, all the rest plain (user requests).
+            // light falls and the camera sees, one coarser half tile after, all the rest plain (user requests).
             const lit = LightLanePresentation._litLevel(row, z, this._lightRange);
             if (lit !== slot.lit) {
                 slot.lit = lit;
@@ -403,7 +406,6 @@ class LightLanePresentation {
             engine.drawInstance(slot.edge);
         }
     }
-
 
     // The fog plane under the track, stepped by whole mirrored pairs of cells along the run: it stays put in the world.
     _drawFog() {
@@ -460,14 +462,13 @@ class LightLanePresentation {
 
     // A coin spins and bobs (art § 5.2); picked up, it rises and fades out (art § 7).
     _placeCoin(instance, entity, since) {
-        const phase = (entity.serial * LightLanePresentation.BOB_PHASE_STEP);
+        const phase = (entity.serial * LightLaneTuning.COIN_BOB_PHASE_STEP);
         const bob   = (LightLaneTuning.COIN_BOB * Math.sin((2 * Math.PI * LightLaneTuning.COIN_BOB_HZ * this._time) + phase));
         const taken = ((entity.taken) ? Math.min(1, (since / LightLaneTuning.COIN_TAKE_TIME)) : 0);
-        // Picked up, it goes on with the runner, just before it, rising, growing and fading (art § 7).
+        // Picked up, it goes on with the runner, just before it, rising and fading (art § 7).
         const z     = ((entity.taken) ? (this._simulation.getZ() + Math.max(entity.takenDz, LightLaneTuning.COIN_TAKE_AHEAD)) : entity.z);
-        instance.placeAt(entity.x, ((entity.y - LightLanePresentation.COIN_HALF_HEIGHT) + bob + (LightLaneTuning.COIN_TAKE_RISE * taken)), z);
+        instance.placeAt(entity.x, ((entity.y - LightLaneTuning.SHAPES.COIN.halfHeight) + bob + (LightLaneTuning.COIN_TAKE_RISE * taken)), z);
         instance.setRotation([0, ((LightLaneTuning.COIN_SPIN * this._time) % LightLanePresentation.FULL_TURN), 0]);
-        instance.setRenderScale(1 + ((LightLaneTuning.COIN_TAKE_SCALE - 1) * taken));
         instance.setRenderLight(1 - taken);
     }
 
@@ -499,8 +500,6 @@ class LightLanePresentation {
         return code;
     }
 
-
-
     /**
      * The fine halves: every half tile the runner's light reaches, or soon will, that the camera sees (from
      * GROUND_SEEN_BEHIND behind the runner to the light's range + FINE_AHEAD_MARGIN ahead), one or two; then one coarser
@@ -521,7 +520,6 @@ class LightLanePresentation {
         return ((code === 'PP') ? null : code);
     }
 
-
     _acquire(code) {
         const free = this._free.get(code);
         if ((free !== undefined) && (free.length > 0)) {
@@ -534,7 +532,6 @@ class LightLanePresentation {
     // Back to the pool of its own object.
     _release(view) {
         view.instance.setRenderLight(1);
-        view.instance.setRenderScale(1);
         if (!this._free.has(view.code)) {
             this._free.set(view.code, []);
         }
@@ -581,16 +578,8 @@ LightLanePresentation.CLIP_JUMP       = 'jump';
 LightLanePresentation.CLIP_SLIDE      = 'slide';
 LightLanePresentation.CLIP_STUMBLE    = 'stumble';
 LightLanePresentation.CLIP_FALL       = 'fall';
-// jumpHigh (boots): the jump clip played at this pace (art § 6.2).
-LightLanePresentation.JUMP_HIGH_PACE  = 0.79;
 LightLanePresentation.SHARD_PLAYER    = 'Player';
-// The coin object stands on its bottom; its entity gives its centre.
-LightLanePresentation.COIN_HALF_HEIGHT = 0.16;
-// Coins bob out of step: phase step per serial, radians.
-LightLanePresentation.BOB_PHASE_STEP  = 1.7;
 // Rotation about z that leans the runner towards a move to the right (Instance.setRotation's sign).
 LightLanePresentation.LEAN_SIGN       = -1;
-// The sky pass's roll against the camera's matrixRotateZ (the picture leans with the track).
-LightLanePresentation.SKY_ROLL_SIGN   = 1;
 // The bloom works with the WebGL renderer only.
 LightLanePresentation.BLOOM_RENDERER  = 'webgl';

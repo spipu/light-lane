@@ -18,11 +18,11 @@ class LightLaneCommandSampler {
             [LightLaneCommandSampler.JUMP, () => controls.readButtonJump()],
             [LightLaneCommandSampler.SLIDE, () => controls.readButtonSlide()]
         ];
-        this._wasDown  = new Map(this._readers.map(([order]) => [order, true]));
-        this._stick    = {x: 0, y: 0};
+        this._wasDown    = new Map(this._readers.map(([order]) => [order, true]));
+        this._stick      = {x: 0, y: 0};
         this._stickArmed = false;
-        this._script   = (script ?? []);
-        this._scriptAt = 0;
+        this._script     = (script ?? []);
+        this._scriptAt   = 0;
     }
 
     /**

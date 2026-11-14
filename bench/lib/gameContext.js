@@ -1,6 +1,6 @@
 /**
- * The simulation's classes loaded in a vm context, as the browser loads them (bootstrap order), without the engine,
- * the DOM or the loader: what the suites drive. AppInputSwipe is reduced to its direction constants (read at load by
+ * The simulation's classes loaded in a vm context, in the browser's order (read from js/libBootstrap.json), without
+ * the engine, the DOM or the loader: what the suites drive. AppInputSwipe is reduced to its direction constants (read at load by
  * LightLaneCommandSampler).
  */
 
@@ -26,12 +26,24 @@ const SOURCES     = [
 /**
  * @returns {object} the context, its classes readable by name (ctx.get('LightLaneSimulation'))
  */
+// The sources in the browser's order: each must be declared in js/libBootstrap.json, loaded in its order.
+function ordered() {
+    const declared = Object.values(JSON.parse(fs.readFileSync(path.join(WEBSITE_DIR, 'js/libBootstrap.json'), 'utf8')).files).flat()
+        .map((file) => file.replace(/^\//, ''));
+    const missing  = SOURCES.filter((file) => !declared.includes(file));
+    if (missing.length > 0) {
+        throw new Error('gameContext - not in libBootstrap.json: ' + missing.join(', '));
+    }
+
+    return [...SOURCES].sort((a, b) => (declared.indexOf(a) - declared.indexOf(b)));
+}
+
 function load() {
     const ctx = vm.createContext({
         console, Math, Object, Array, Map, Set, Error, Number, String, Date, JSON, Infinity,
         AppInputSwipe: {LEFT: 'left', RIGHT: 'right', UP: 'up', DOWN: 'down'}
     });
-    for (const file of SOURCES) {
+    for (const file of ordered()) {
         vm.runInContext(fs.readFileSync(path.join(WEBSITE_DIR, file), 'utf8'), ctx, {filename: file});
     }
 

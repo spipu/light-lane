@@ -69,13 +69,12 @@ class LightLaneHud extends AbstractHud {
         const block    = this._add(root, 'div', 'light-lane-hud-score-block');
         els.score      = this._add(block, 'div', 'light-lane-hud-score');
         const best     = this._add(block, 'div', 'light-lane-hud-best');
-        this._add(best, 'span', 'light-lane-hud-best-label', appTranslator.get('hud.best'));
+        els.bestLabel  = this._add(best, 'span', 'light-lane-hud-best-label');
         els.best       = this._add(best, 'span', 'light-lane-hud-best-value');
         els.time       = this._add(block, 'div', 'light-lane-hud-time');
         els.countdown  = this._add(root, 'div', 'light-lane-hud-countdown');
         els.pause      = this._add(root, 'button', 'light-lane-hud-pause');
         els.pause.type = 'button';
-        els.pause.setAttribute('aria-label', appTranslator.get('pause.title'));
         els.pause.innerHTML = LightLaneHud.PAUSE_ICON;
         els.pause.addEventListener('click', () => {
             if (this._onPause !== null) {
@@ -83,6 +82,20 @@ class LightLaneHud extends AbstractHud {
             }
         });
         els.fps        = this._add(root, 'div', 'light-lane-hud-fps');
+        this.refreshTexts();
+    }
+
+    // The language may change in the pause's options: the labels and the number format follow it.
+    refreshTexts() {
+        this._numbers = new Intl.NumberFormat(appTranslator.getLocale());
+        this._shown   = {};
+        if (this._els.root === undefined) {
+            return this;
+        }
+        this._els.bestLabel.textContent = appTranslator.get('hud.best');
+        this._els.pause.setAttribute('aria-label', appTranslator.get('pause.title'));
+
+        return this;
     }
 
     update() {

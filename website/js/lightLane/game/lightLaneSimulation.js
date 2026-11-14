@@ -42,6 +42,7 @@ class LightLaneSimulation {
         this._sweep         = {x0: 0, x1: 0, y0: 0, y1: 0, z0: 0, z1: 0};
         this._before        = {x0: 0, x1: 0, y0: 0, y1: 0, z0: 0, z1: 0};
         this._reach         = {x0: 0, x1: 0, y0: 0, y1: 0, z0: 0, z1: 0};
+        this._standing      = {x0: 0, x1: 0, y0: 0, y1: 0, z0: 0, z1: 0};
     }
 
     /**
@@ -51,9 +52,9 @@ class LightLaneSimulation {
      *        test mode's fixed speed
      */
     newRun(options = {}) {
-        const tier          = (options.tier ?? 0);
-        const start         = LightLaneSimulation.tierStart(tier);
-        this._z             = start;
+        const tier = (options.tier ?? 0);
+
+        this._z             = LightLaneSimulation.tierStart(tier);
         this._runner.reset();
         this._savePrevious();
         this._runTime       = 0;
@@ -65,11 +66,11 @@ class LightLaneSimulation {
         this._accumulator   = 0;
         this._death         = null;
         this._shield        = (options.shield === true);
-        this._fixedSpeed    = ((options.speed === undefined) ? null : options.speed);
+        this._fixedSpeed    = (options.speed ?? null);
         this._shieldDeaths  = 0;
         this._score.reset();
         this._events.clear();
-        this._generator.reset((options.seed ?? LightLaneRandom.freshSeed()), start, (options.track ?? null));
+        this._generator.reset((options.seed ?? LightLaneRandom.freshSeed()), this._z, (options.track ?? null));
         this._generator.update(this._z);
         this._startCountdown(true);
 
@@ -352,7 +353,7 @@ class LightLaneSimulation {
     // The standing box at the runner's place cuts a gate (a slide goes on, a jump waits: gameplay § 3.5).
     _standingCutsGate() {
         const runner = this._runner;
-        const box    = LightLaneCollision.runnerBox(this._reach, runner.x, runner.y, LightLaneTuning.RUNNER_HEIGHT, this._z, this._z);
+        const box    = LightLaneCollision.runnerBox(this._standing, runner.x, runner.y, LightLaneTuning.RUNNER_HEIGHT, this._z, this._z);
         for (const entity of this._generator.getActive()) {
             if ((entity.kind === LightLaneEntity.GATE) && LightLaneCollision.overlaps(box, entity.box)) {
                 return true;
@@ -369,12 +370,12 @@ class LightLaneSimulation {
                 const runner = this._runner;
                 runner.reset();
                 // Past the gap it fell into, on lane 0.
-                this._z += LightLaneSimulation.SHIELD_FALL_SKIP;
+                this._z += LightLaneTuning.SHIELD_FALL_SKIP;
             }
             return;
         }
-        this._state     = LightLaneSimulation.DYING;
-        this._death     = death;
+        this._state       = LightLaneSimulation.DYING;
+        this._death       = death;
         this._dyingTime   = 0;
         this._fallSpeed   = 0;
         this._fallForward = (this._speed * this._runner.getSpeedFactor());
@@ -386,10 +387,10 @@ class LightLaneSimulation {
     _die(dt) {
         this._dyingTime += dt;
         if (this._death === LightLaneRunner.DEATH_FALL) {
-            this._fallSpeed += (LightLaneTuning.FALL_GRAVITY * dt);
-            this._runner.y  -= (this._fallSpeed * dt);
+            this._fallSpeed   += (LightLaneTuning.FALL_GRAVITY * dt);
             this._fallForward *= Math.exp(-LightLaneTuning.FALL_FORWARD_DECAY * dt);
-            this._z         += (this._fallForward * dt);
+            this._z           += (this._fallForward * dt);
+            this._runner.drop(this._fallSpeed * dt);
         }
         if (this._dyingTime >= LightLaneTuning.DYING_TIME[this._death]) {
             this._state = LightLaneSimulation.GAME_OVER;
@@ -427,5 +428,3 @@ LightLaneSimulation.RUNNING   = 'running';
 LightLaneSimulation.DYING     = 'dying';
 LightLaneSimulation.GAME_OVER = 'gameOver';
 LightLaneSimulation.GO        = 'go';
-// Under the shield, a fall puts the runner this far ahead, past the longest gap.
-LightLaneSimulation.SHIELD_FALL_SKIP = 6;
