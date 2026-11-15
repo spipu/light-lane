@@ -451,9 +451,9 @@
 }
 
 /* The lightning (user requests: the city only, the picture as it is most of the time, a flash every 3 to 8 s, in CSS
-   only, nothing under 40 % of light touched, the lights above pushed towards white in a line): the same picture
+   only, nothing under 35 % of light touched, the lights above pushed towards white in a line): the same picture
    through that curve (MainMenuScreen._addLightningFilter, an inline SVG filter), over the picture, hidden;
-   MainMenuScreen plays its opacity in a flash. No blend mode: under 40 % both layers are the same, so the darks never
+   MainMenuScreen plays its opacity in a flash. No blend mode: under 35 % both layers are the same, so the darks never
    move. On its own layer for good (will-change), not promoted and demoted at each flash. */
 .light-lane-home-sky-lit {
     filter: url('#light-lane-home-lightning');

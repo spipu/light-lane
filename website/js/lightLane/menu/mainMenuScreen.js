@@ -219,10 +219,11 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
         context.setTransform(1, 0, 0, 1, 0, 0);
     }
 
-    // The canvas at the floor's size in CSS pixels (the mist is soft: no device pixel ratio), and the em there.
+    // The canvas at MIST_SCALE of the floor's size in CSS pixels, stretched by the browser (the mist is soft: a quarter
+    // of the pixels to draw, user decision), and the em in its pixels.
     _fitMist() {
-        const width  = this._mist.clientWidth;
-        const height = this._mist.clientHeight;
+        const width  = Math.max(1, Math.round(this._mist.clientWidth * MainMenuScreen.MIST_SCALE));
+        const height = Math.max(1, Math.round(this._mist.clientHeight * MainMenuScreen.MIST_SCALE));
         if ((width === this._mistSize[0]) && (height === this._mistSize[1])) {
             return;
         }
@@ -230,7 +231,7 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
         this._mist.height = height;
         this._mistSize[0] = width;
         this._mistSize[1] = height;
-        this._mistSize[2] = parseFloat(getComputedStyle(this._mist).fontSize);
+        this._mistSize[2] = (parseFloat(getComputedStyle(this._mist).fontSize) * MainMenuScreen.MIST_SCALE);
     }
 
     // The next lightning, FLASH_EVERY [min, max] seconds from now.
@@ -270,6 +271,8 @@ MainMenuScreen.BACKDROP_PARTS = Object.freeze(['sky', 'sky light-lane-home-sky-l
 MainMenuScreen.MIST_CELL      = Object.freeze([20, 10]);
 MainMenuScreen.MIST_ORIGIN    = 70;
 MainMenuScreen.MIST_ROLL      = 14;
+// Its canvas's resolution, as a share of its size on screen (user decision: half, a quarter of the pixels).
+MainMenuScreen.MIST_SCALE     = 0.5;
 MainMenuScreen.MIST_FPS       = LightLaneTuning.FOG_FPS;
 MainMenuScreen.MIST_STEP_MAX  = 100;
 MainMenuScreen.MODAL_SELECTOR = '.app-menu-overlay';
@@ -283,11 +286,11 @@ MainMenuScreen._mistDecoded = null;
 // its fading.
 MainMenuScreen.LIGHTNING_SELECTOR = '.light-lane-home-sky-lit';
 // The lightning's curve (_addLightningFilter): its SVG filter's id (css/lightLane.css), unchanged up to LIGHTNING_KNEE
-// (40 %: at 70 %, then 50 %, the lightning could hardly be seen, user requests), LIGHTNING_FORCE of the way to white
+// (35 %: at 70 %, then 50 %, the lightning could hardly be seen, user requests), LIGHTNING_FORCE of the way to white
 // above it, along t^LIGHTNING_POWER (1, a straight line: the square, under 1 for t in [0, 1], rose too little; user
 // decisions), sampled in LIGHTNING_STEPS steps.
 MainMenuScreen.LIGHTNING_FILTER   = 'light-lane-home-lightning';
-MainMenuScreen.LIGHTNING_KNEE     = 0.4;
+MainMenuScreen.LIGHTNING_KNEE     = 0.35;
 MainMenuScreen.LIGHTNING_FORCE    = 1;
 MainMenuScreen.LIGHTNING_POWER    = 1;
 MainMenuScreen.LIGHTNING_STEPS    = 100;
