@@ -265,7 +265,8 @@ class LightLaneOccupancy {
 LightLaneOccupancy.LANES          = 5;
 LightLaneOccupancy.LANE_OFFSET    = 2;
 LightLaneOccupancy.START_CAPACITY = 512;
-// Cells kept past the window for the search (a lane change at the last cell: c(LANE_CHANGE_TIME) at the top speed).
+// Cells of capacity kept past the window for the search's width (a lane change at the last cell: c(LANE_CHANGE_TIME) at
+// the top speed); the grid reads FREE past the window.
 LightLaneOccupancy.SEARCH_MARGIN  = 32;
 // Each state enters the queue at most once a predecessor; a few predecessors a state at most.
 LightLaneOccupancy.QUEUE_SPARE    = 3;

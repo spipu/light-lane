@@ -62,9 +62,9 @@ class LightLaneGameOverModal extends AppMenuAbstractListModal {
         this._nav.addItemIn(listEl, appTranslator.get('over.replay'), () => this.replay());
         this._nav.addItemIn(listEl, appTranslator.get('menu.bestScores'), () => this._unlocked(this._onScores));
         this._nav.addItemIn(listEl, appTranslator.get('pause.quit'), () => this._unlocked(this._onQuit));
+        this._openedAt = performance.now();
         this._nav.attach();
         this._nav.selectFirst();
-        this._openedAt = performance.now();
 
         return this;
     }
@@ -94,10 +94,19 @@ class LightLaneGameOverModal extends AppMenuAbstractListModal {
     }
 
     _unlocked(action) {
-        if ((performance.now() - this._openedAt) < (LightLaneTuning.GAME_OVER_INPUT_LOCK * LightLaneTuning.MS_PER_SECOND)) {
+        if (this._locked()) {
             return;
         }
         action();
+    }
+
+    // The opening lock: nothing moves the selection either (a direction held when the runner died would leave Play again).
+    _navBlocked() {
+        return (this._locked() || super._navBlocked());
+    }
+
+    _locked() {
+        return ((performance.now() - this._openedAt) < (LightLaneTuning.GAME_OVER_INPUT_LOCK * LightLaneTuning.MS_PER_SECOND));
     }
 
     _addRow(table, label, value) {

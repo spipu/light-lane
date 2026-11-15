@@ -11,7 +11,7 @@ class LightLaneObjectBuilder {
 
     /**
      * The faces made next are floor (true): painted LIGHT_COMPENSATION times lighter, outside the light group, so the
-     * runner's light shows on them; the others (false) are in LightLaneModels.LIGHT_GROUP, whose factor keeps their
+     * runner's light shows on them; the others (false) are in LightLaneObjectBuilder.LIGHT_GROUP, whose factor keeps their
      * look under the lowered ambient.
      *
      * @param {boolean} floor
@@ -142,32 +142,6 @@ class LightLaneObjectBuilder {
         }
         for (const quad of quads) {
             this.polygon(this._outward(quad, centre), color, true);
-        }
-
-        return this;
-    }
-
-    /**
-     * A prism: a polygon of the xz plane (corners clockwise seen from above) from y0 to y1.
-     *
-     * @param {number[][]} outline - [[x, z], ...]
-     * @param {number}     y0
-     * @param {number}     y1
-     * @param {{top: number[], side: number[], bottom: number[]}} colors
-     */
-    prism(outline, y0, y1, colors) {
-        const top    = outline.map(([x, z]) => [x, y1, z]);
-        const bottom = outline.map(([x, z]) => [x, y0, z]).reverse();
-        this.polygon(top, colors.top);
-        if (colors.bottom !== null) {
-            this.polygon(bottom, colors.bottom);
-        }
-        const n = outline.length;
-        for (let i = 0; i < n; i++) {
-            const [xa, za] = outline[i];
-            const [xb, zb] = outline[(i + 1) % n];
-            // Seen from outside, going clockwise above: the side's corners bottom a, top a, top b, bottom b.
-            this.polygon([[xa, y0, za], [xa, y1, za], [xb, y1, zb], [xb, y0, zb]].reverse(), colors.side);
         }
 
         return this;

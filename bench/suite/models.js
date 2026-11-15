@@ -31,10 +31,13 @@ const RUNNER_CLIPS     = {idle: null, run: null, jump: 0.75, slide: 0.70, stumbl
 const RUNNER_TRIANGLES = 3000;
 const DURATION_EPSILON = 1e-6;
 
-// The objects built in code and what they read (art § 5.1 budgets: an enemy 800 triangles, the Sentinel 1 500).
+// The objects built in code and what they read (tech § 9 budgets: an enemy 800 triangles, the Sentinel 1 500, any other
+// 300; a whole row of tiles 300 a lane; a block 300 + 25 a metre).
 const BUILT_SOURCES      = ['js/lightLane/lightLaneTuning.js', 'js/lightLane/game/lightLaneObjectBuilder.js', 'js/lightLane/game/lightLaneEntity.js', 'js/lightLane/game/lightLaneModels.js'];
 const ENEMY_TRIANGLES    = 800;
 const SENTINEL_TRIANGLES = 1500;
+const OTHER_TRIANGLES    = 300;
+const BLOCK_PER_METRE    = 25;
 
 class ModelsBench {
     constructor() {
@@ -84,10 +87,12 @@ class ModelsBench {
         return this._failures;
     }
 
-    // The objects built in code (LightLaneModels): the enemies and the Sentinel within their budgets (art § 5.1), every
-    // face a triangle, glowing faces present.
+    // The objects built in code (LightLaneModels): the enemies and the Sentinel within their budgets (tech § 9), every
+    // face a triangle, glowing faces present; then every object load() builds within its budget.
     _builtModels() {
-        const ctx = vm.createContext({console, Math, Object, Array, Map, Set, Error, Number, String});
+        const loaded = [];
+        const ctx = vm.createContext({console, Math, Object, Array, Map, Set, Error, Number, String,
+            loader: {objects: () => ({loadFromData: (code, data) => loaded.push([code, data.faces.length])}), textures: () => ({load: () => 0}), animatedModels: () => ({loadByCode: () => null})}});
         for (const file of BUILT_SOURCES) {
             vm.runInContext(fs.readFileSync(path.join(WEBSITE_DIR, file), 'utf8'), ctx, {filename: file});
         }
@@ -103,6 +108,28 @@ class ModelsBench {
             const ok        = ((triangles <= budget) && data.faces.every((face) => (face.pts.length === 3)) && data.faces.some((face) => (face.glow === true)));
             this._check(name + ': ' + triangles + ' triangles, budget ' + budget + ', glowing lines', ok);
         }
+        vm.runInContext('LightLaneModels.load(false)', ctx);
+        const over = loaded.filter(([code, triangles]) => (triangles > ModelsBench._budget(code)));
+        this._check('every built object (' + loaded.length + ') within its budget' + ((over.length > 0) ? (': over ' + over.map(([code, n]) => (code + ' ' + n + '/' + ModelsBench._budget(code))).join(', ')) : ''), (over.length === 0));
+    }
+
+    static _budget(code) {
+        if (code.startsWith('prowler') || code.startsWith('stalker')) {
+            return ENEMY_TRIANGLES;
+        }
+        if (code.startsWith('sentinel')) {
+            return SENTINEL_TRIANGLES;
+        }
+        const row = /^row(\d)/.exec(code);
+        if (row !== null) {
+            return (OTHER_TRIANGLES * Number(row[1]));
+        }
+        const block = /^block(\d+)/.exec(code);
+        if (block !== null) {
+            return (OTHER_TRIANGLES + (BLOCK_PER_METRE * Number(block[1])));
+        }
+
+        return OTHER_TRIANGLES;
     }
 
     _check(label, ok) {

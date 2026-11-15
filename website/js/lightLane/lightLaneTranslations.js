@@ -20,10 +20,10 @@ class LightLaneTranslations {
                 es: 'Ayuda'
             },
             'menu.storageUnavailable': {
-                fr: 'Stockage navigateur indisponible — les paramètres et les meilleurs scores ne seront pas enregistrés.',
-                en: 'Browser storage unavailable — the settings and the best scores will not be saved.',
-                it: 'Archiviazione del browser non disponibile — le impostazioni e i migliori punteggi non verranno salvati.',
-                es: 'Almacenamiento del navegador no disponible — los ajustes y las mejores puntuaciones no se guardarán.'
+                fr: 'Stockage navigateur indisponible — les paramètres, les meilleurs scores et la galerie ne seront pas enregistrés.',
+                en: 'Browser storage unavailable — the settings, the best scores and the gallery will not be saved.',
+                it: 'Archiviazione del browser non disponibile — le impostazioni, i migliori punteggi e la galleria non verranno salvati.',
+                es: 'Almacenamiento del navegador no disponible — los ajustes, las mejores puntuaciones y la galería no se guardarán.'
             },
             'options.display': {
                 fr: 'Affichage',
@@ -169,6 +169,12 @@ class LightLaneTranslations {
                 en: 'Best scores',
                 it: 'Migliori punteggi',
                 es: 'Mejores puntuaciones'
+            },
+            'menu.storageBlocked': {
+                fr: 'Une autre fenêtre de Light Lane bloque la mise à jour — fermez-la pour continuer.',
+                en: 'Another Light Lane window blocks the update — close it to go on.',
+                it: 'Un’altra finestra di Light Lane blocca l’aggiornamento — chiudila per continuare.',
+                es: 'Otra ventana de Light Lane bloquea la actualización — ciérrala para continuar.'
             },
             'menu.gallery': {
                 fr: 'Galerie',
@@ -471,10 +477,10 @@ class LightLaneTranslations {
                 es: 'El cian te ayuda, el ámbar te avisa, el naranja te hace tropezar, el rojo es mortal.'
             },
             'help.obstacles': {
-                fr: 'Sautez les haies, glissez sous les portiques, changez de voie devant les blocs et les engins, sautez les brèches. Les voies qui passent au rouge finissent dans le vide.',
-                en: 'Jump hurdles, slide under gates, change lane in front of blocks and vehicles, jump over gaps. Lanes that turn red end in the void.',
-                it: 'Salta gli ostacoli bassi, scivola sotto le travi, cambia corsia davanti ai blocchi e ai veicoli, salta le voragini. Le corsie che diventano rosse finiscono nel vuoto.',
-                es: 'Salta las vallas, deslízate bajo los pórticos, cambia de carril ante los bloques y los vehículos, salta los huecos. Los carriles que se vuelven rojos terminan en el vacío.'
+                fr: 'Sautez les haies, glissez sous les portiques, changez de voie devant les blocs et les motos, sautez les brèches. À partir de 4 200 m, les motos laissent une traînée mortelle : évitez-la ou sautez-la. Les voies qui passent au rouge finissent dans le vide.',
+                en: 'Jump hurdles, slide under gates, change lane in front of blocks and motorbikes, jump over gaps. From 4,200 m the motorbikes leave a deadly trail: keep off it or jump it. Lanes that turn red end in the void.',
+                it: 'Salta gli ostacoli, scivola sotto i portali, cambia corsia davanti ai blocchi e alle moto, salta le brecce. Dai 4.200 m le moto lasciano una scia mortale: evitala o saltala. Le corsie che diventano rosse finiscono nel vuoto.',
+                es: 'Salta las vallas, deslízate bajo los pórticos, cambia de carril ante los bloques y las motos, salta las brechas. Desde los 4.200 m las motos dejan una estela mortal: evítala o sáltala. Los carriles que se vuelven rojos terminan en el vacío.'
             },
             'help.hits': {
                 fr: 'Un choc de face termine la course. Un choc de côté vous fait trébucher ; deux faux pas en moins de 5 secondes et la course est finie.',

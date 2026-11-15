@@ -400,6 +400,7 @@ class LightLaneEntity {
         this._x      = (lane * LightLaneTuning.LANE_WIDTH);
         this._y      = y;
         this._z      = z;
+        this._front  = z;   // no bike's front kept from a recycled one (a copy must match its original)
         this._length = 0;
 
         return this;

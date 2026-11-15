@@ -13,6 +13,7 @@ class GalleryScreen extends AbstractLightLaneMenuScreen {
         this._held      = {left: false, right: false};
         this._swipeX    = null;    // the finger's last position on the view, null while none is down
         this._swipeY    = 0;
+        this._swipeId   = null;    // the pointer followed (the first down; another finger is ignored)
         this._onKeyDown = (event) => this._key(event, true);
         this._onKeyUp   = (event) => this._key(event, false);
         this._onBlur    = () => this._release();
@@ -47,6 +48,8 @@ class GalleryScreen extends AbstractLightLaneMenuScreen {
     }
 
     hide() {
+        this._swipeX  = null;
+        this._swipeId = null;
         document.removeEventListener('keydown', this._onKeyDown);
         document.removeEventListener('keyup', this._onKeyUp);
         window.removeEventListener('blur', this._onBlur);
@@ -96,23 +99,32 @@ class GalleryScreen extends AbstractLightLaneMenuScreen {
     // A finger (or the mouse, button down) moved across the view turns the item, up and down too (user request).
     _bindSwipe(host) {
         host.addEventListener('pointerdown', (event) => {
-            this._swipeX = event.clientX;
-            this._swipeY = event.clientY;
+            if (this._swipeId !== null) {
+                return;
+            }
+            this._swipeId = event.pointerId;
+            this._swipeX  = event.clientX;
+            this._swipeY  = event.clientY;
             host.setPointerCapture(event.pointerId);
         });
         host.addEventListener('pointermove', (event) => {
-            if ((this._swipeX === null) || (this._view === null)) {
+            if ((this._swipeX === null) || (event.pointerId !== this._swipeId) || (this._view === null)) {
                 return;
             }
             this._view.swipe((event.clientX - this._swipeX), (event.clientY - this._swipeY));
             this._swipeX = event.clientX;
             this._swipeY = event.clientY;
         });
-        const end = () => {
-            this._swipeX = null;
+        const end = (event) => {
+            if (event.pointerId !== this._swipeId) {
+                return;
+            }
+            this._swipeX  = null;
+            this._swipeId = null;
         };
         host.addEventListener('pointerup', end);
         host.addEventListener('pointercancel', end);
+        host.addEventListener('lostpointercapture', end);
     }
 }
 

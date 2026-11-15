@@ -6,7 +6,11 @@
 class LightLaneMenuNavigator {
     constructor() {
         this._display          = new AppMenuDisplay('screen', AppMenuDisplay.LANDSCAPE);
-        this._database         = new AppDatabase(LightLaneDatabaseSchema.build());
+        // A newer version opened in another tab closes the base: this tab's code is out of date, it reloads at once (user
+        // decision, even in a run); an upgrade that waits for the other tabs says so.
+        this._database         = new AppDatabase(LightLaneDatabaseSchema.build())
+            .setOnClosed(() => window.location.reload())
+            .setOnBlocked(() => new AppMenuModal(this._display).info(appTranslator.get('menu.storageBlocked')));
         this._mainMenuScreen   = new MainMenuScreen(this, this._display);
         this._bestScoresScreen = new BestScoresScreen(this, this._display);
         this._galleryScreen    = new GalleryScreen(this, this._display);

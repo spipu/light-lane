@@ -39,6 +39,7 @@ class LightLaneSimulation {
         this._shield        = false;
         this._fixedSpeed    = null;
         this._shieldDeaths  = 0;
+        this._stumbled      = false;  // a stumble this step: a second one in the same step is the same (one collision a step)
         this._passed        = 0;      // the gallery's items passed this run (gameplay § 14), a bit each (GALLERY_ITEMS)
         this._sentinelSeen  = false;  // the Sentinel's pass under way was seen
         this._pending       = [];     // orders received, handed to the next running step
@@ -82,6 +83,8 @@ class LightLaneSimulation {
         this._generator.reset(seed, this._z, (options.track ?? null));
         this._sentinel.reset(seed);
         this._generator.update(this._z);
+        // The bikes laid at the start where they really are (they do not move during the countdown).
+        this._moveEnemies(this._runner.getSpeedFactor());
         this._startCountdown(true);
 
         return this;
@@ -243,6 +246,7 @@ class LightLaneSimulation {
         this._shield       = other._shield;
         this._fixedSpeed   = other._fixedSpeed;
         this._shieldDeaths = other._shieldDeaths;
+        this._stumbled     = other._stumbled;
         this._passed       = other._passed;
         this._sentinelSeen = other._sentinelSeen;
         this._pending.length = 0;
@@ -324,6 +328,7 @@ class LightLaneSimulation {
         this._score.addDistance(metres, false);
         this._generator.update(this._z);
         this._moveEnemies(runner.getSpeedFactor());
+        this._stumbled = false;
         if (this._checkGaps() || this._checkObstacles() || this._checkEnemies() || this._checkTrails() || this._checkShots(dt)) {
             return;
         }
@@ -397,6 +402,10 @@ class LightLaneSimulation {
                 continue;
             }
             const entry = LightLaneCollision.entry(before, entity.getPrevBox());
+            // Already inside (after a side stumble): the next enemy is still checked, as for the other elements.
+            if (LightLaneCollision.outcome(entity.getKind(), entry) === LightLaneCollision.IGNORE) {
+                continue;
+            }
             if (this._collide(entity, entry)) {
                 return true;
             }
@@ -452,12 +461,8 @@ class LightLaneSimulation {
             this._kill(LightLaneRunner.DEATH_SHOCK);
             return true;
         }
-        if (outcome === LightLaneSentinel.STUMBLE) {
-            if (this._runner.stumble(false)) {
-                this._kill(LightLaneRunner.DEATH_TRIP);
-                return true;
-            }
-            this._events.add(LightLaneEvents.STUMBLE);
+        if ((outcome === LightLaneSentinel.STUMBLE) && this._stumble(false)) {
+            return true;
         }
 
         return false;
@@ -470,6 +475,8 @@ class LightLaneSimulation {
         const y      = runner.getY();
         for (const entity of this._generator.getActive()) {
             if ((entity.getKind() === LightLaneEntity.GAP) && LightLaneCollision.fallsInto(entity.getBox(), x, y, this._z)) {
+                // Fallen into (under the test mode's shield too): not passed, for the gallery (gameplay § 14).
+                entity.markHit();
                 this._kill(LightLaneRunner.DEATH_FALL);
                 return true;
             }
@@ -530,7 +537,22 @@ class LightLaneSimulation {
             entity.markHit();
             runner.land();
         }
-        if (runner.stumble(entry === LightLaneCollision.SIDE)) {
+
+        return this._stumble((entry === LightLaneCollision.SIDE), entity);
+    }
+
+    /**
+     * A stumble (gameplay § 3.7), once a step (§ 5.1: an element and a sweep met on the same step make one stumble, not
+     * a trip; the checks still all run, an element skipped would be met as already inside on the next step).
+     *
+     * @returns {boolean} the runner died (the second while fragile)
+     */
+    _stumble(side, entity = null) {
+        if (this._stumbled) {
+            return false;
+        }
+        this._stumbled = true;
+        if (this._runner.stumble(side)) {
             this._kill(LightLaneRunner.DEATH_TRIP);
             return true;
         }

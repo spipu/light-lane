@@ -94,7 +94,7 @@ LightLaneTuning.RUNNER_LIGHT_COLOR = [225, 375, 412];
 LightLaneTuning.RUNNER_LIGHT_RANGE = 2.0;
 // The ambient is a third: the floor is painted LIGHT_COMPENSATION times lighter (the same away from the light, up to
 // that many times lighter in it) and every other face keeps its look through its light group's factor
-// (LightLaneModels.LIGHT_GROUP) or its instance's render light.
+// (LightLaneObjectBuilder.LIGHT_GROUP) or its instance's render light.
 LightLaneTuning.AMBIENT = [85, 85, 85];
 // At a death (user request), the runner's light flares to DEATH_LIGHT_PEAK times its colour and DEATH_LIGHT_RANGE times
 // its range in DEATH_LIGHT_RISE, then dies down to nothing by the end of the dying (DYING_TIME).
@@ -241,11 +241,12 @@ LightLaneTuning.ENEMY_SHOWN        = 135;
 LightLaneTuning.STALKER_WARN       = 2.4;
 LightLaneTuning.STALKER_MOVE       = 1.6;
 LightLaneTuning.STALKER_MOVE_TIME  = 0.5;
-// From TRAIL_TIER (4 200 m, user decision), a bike leaves a light trail behind its back: TRAIL_LENGTH long (3 tiles) in
+// From TRAIL_TIER (4 200 m, user decision), a bike leaves a light trail behind its back: TRAIL_LENGTH long (user request:
+// 25 m, from 30) in
 // TRAIL_BANDS bands each dimmer than the one before (TRAIL_FADE of the colour), TRAIL_THICK thick (a quarter of the
 // tyre) and TRAIL_HEIGHT high (the tyre's); it follows the bike's path, kills at a touch, a jump clears it.
 LightLaneTuning.TRAIL_TIER   = 7;
-LightLaneTuning.TRAIL_LENGTH = 30;
+LightLaneTuning.TRAIL_LENGTH = 25;
 LightLaneTuning.TRAIL_BANDS  = 3;
 LightLaneTuning.TRAIL_FADE   = Object.freeze([1.0, 0.6, 0.3]);
 LightLaneTuning.TRAIL_THICK  = 0.085;
@@ -316,9 +317,10 @@ LightLaneTuning.SENTINEL_SWAY        = 2.0;
 LightLaneTuning.SENTINEL_BRIDLE      = 11.5;
 LightLaneTuning.SENTINEL_GAP         = 1.4;
 LightLaneTuning.SENTINEL_PATTERNS    = Object.freeze(['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'D1', 'D2', 'D3', 'D4', 'D5']);
-// Three attacks a pass, at these times of its presence; strike STRIKE_CHANCE, else a sweep, low or high (never the same
-// height twice in a row).
-LightLaneTuning.SENTINEL_ATTACKS     = Object.freeze([1.0, 3.4, 5.6]);
+// Three attacks a pass, at these times of its presence, 2.35 s apart at least (a strike's warning, column and trace: none
+// cut by the next) and the last strike over by 7.95 s (< SENTINEL_PRESENT); strike STRIKE_CHANCE, else a sweep, low or
+// high (never the same height twice in a row).
+LightLaneTuning.SENTINEL_ATTACKS     = Object.freeze([0.9, 3.25, 5.6]);
 LightLaneTuning.STRIKE_CHANCE        = 0.5;
 LightLaneTuning.SWEEP_LOW_CHANCE     = 0.5;
 // Strike (§ 7.2): announced STRIKE_WARN (a red mark on the lane from STRIKE_MARK [behind, ahead] of the runner, its width
@@ -401,6 +403,8 @@ LightLaneTuning.SHIELD_FALL_SKIP = 6;
 // --- Coins (gameplay § 11.1, generation § 9) ---
 LightLaneTuning.COIN_REACH       = 0.25;
 LightLaneTuning.COIN_POINTS      = 5;
+// The "double score" power-up (gameplay § 11.2): distance and coin points times this.
+LightLaneTuning.SCORE_DOUBLE     = 2;
 LightLaneTuning.COIN_HEIGHT      = 0.7;
 LightLaneTuning.COIN_LOW_HEIGHT  = 0.4;
 LightLaneTuning.COIN_SPACING     = 2.0;

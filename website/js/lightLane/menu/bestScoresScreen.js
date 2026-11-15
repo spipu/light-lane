@@ -71,8 +71,15 @@ class BestScoresScreen extends AbstractLightLaneMenuScreen {
     _confirmClear() {
         new AppMenuModal(this._display).confirm(appTranslator.get('scores.clearConfirm'), () => {
             // The gallery goes with them (user decision, gameplay § 14).
-            Promise.all([lightLaneScores.clear(), lightLaneGallery.clear()]).then(() => this.show(), (error) => this._failed(error));
+            // Built again only if still shown (Back may have been pressed while the store cleared).
+            Promise.all([lightLaneScores.clear(), lightLaneGallery.clear()]).then(() => this._refresh(), (error) => this._failed(error));
         }, null, null, true, appTranslator.get('scores.clearDetail'));
+    }
+
+    _refresh() {
+        if (this._container !== null) {
+            this.show();
+        }
     }
 
     _failed(error) {

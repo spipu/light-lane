@@ -94,6 +94,13 @@ function run() {
     c.check('drawn: strikes about ' + Tuning.STRIKE_CHANCE, (Math.abs((strikes / total) - Tuning.STRIKE_CHANCE) < 0.03), (strikes / total).toFixed(3));
     c.check('drawn: never two sweeps of the same height in a row', (repeats === 0), repeats + ' repeated');
 
+    // The attacks' times (gameplay § 7.1): a strike (warning, column, trace) over before the next attack and before its
+    // presence ends.
+    const strike  = (Tuning.STRIKE_WARN + Tuning.STRIKE_TIME + Tuning.STRIKE_TRACE);
+    const times   = Tuning.SENTINEL_ATTACKS;
+    const spaced  = times.every((t, i) => ((i === 0) || ((t - times[i - 1]) >= (strike - 1e-9))));
+    c.check('attacks: a strike never cut by the next one, the last over within its presence', (spaced && ((times[times.length - 1] + strike) < Tuning.SENTINEL_PRESENT)), times.join(', ') + ' s, a strike ' + strike.toFixed(2) + ' s');
+
     return c.failures;
 }
 

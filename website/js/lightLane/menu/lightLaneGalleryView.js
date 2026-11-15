@@ -47,9 +47,9 @@ class LightLaneGalleryView {
 
     // The loader reset (a run starts): the objects built for the gallery are gone.
     static unload() {
-        LightLaneGalleryView._loaded = false;
+        LightLaneGalleryView._modelsBuilt = false;
         LightLaneGalleryView._instances.clear();
-        LightLaneGalleryView._runner = null;
+        LightLaneGalleryView._sharedRunner = null;
     }
 
     /**
@@ -61,8 +61,8 @@ class LightLaneGalleryView {
         this._item    = item;
         this._running = true;
         this._host.id = LightLaneGalleryView.HOST_ID;
-        if (LightLaneGalleryView._loaded) {
-            this._loaded();
+        if (LightLaneGalleryView._modelsBuilt) {
+            this._onModelsReady();
             return this;
         }
         loader.reset();
@@ -72,8 +72,8 @@ class LightLaneGalleryView {
         loader.setCallback(() => {
             loader.clearCallback();
             LightLaneModels.compensate();
-            LightLaneGalleryView._loaded = true;
-            this._loaded();
+            LightLaneGalleryView._modelsBuilt = true;
+            this._onModelsReady();
         });
         loader.endBatch();
 
@@ -88,16 +88,16 @@ class LightLaneGalleryView {
         this._destroyScreen();
     }
 
-    _loaded() {
+    _onModelsReady() {
         if (!this._running) {
             return;
         }
         this._model = loader.animatedModels().getByCode(LightLaneModels.RUNNER);
-        if (LightLaneGalleryView._runner === null) {
-            LightLaneGalleryView._runner = new AnimatedInstance(this._model).bind();
-            LightLaneGalleryView._runner.getInstance().setRenderLight(LightLaneTuning.LIGHT_COMPENSATION);
+        if (LightLaneGalleryView._sharedRunner === null) {
+            LightLaneGalleryView._sharedRunner = new AnimatedInstance(this._model).bind();
+            LightLaneGalleryView._sharedRunner.getInstance().setRenderLight(LightLaneTuning.LIGHT_COMPENSATION);
         }
-        this._runner = LightLaneGalleryView._runner;
+        this._runner = LightLaneGalleryView._sharedRunner;
         this._ready  = true;
         this._observer.observe(this._host);
         this._resize();
@@ -371,9 +371,9 @@ class LightLaneGalleryView {
 LightLaneGalleryView.HOST_ID       = 'lightLaneGalleryView';
 // The objects built in the loader for the gallery (kept between visits until a run resets it), their instances by code
 // and the runner's.
-LightLaneGalleryView._loaded       = false;
+LightLaneGalleryView._modelsBuilt  = false;
 LightLaneGalleryView._instances    = new Map();
-LightLaneGalleryView._runner       = null;
+LightLaneGalleryView._sharedRunner = null;
 // A size change waits this long for the next before the canvas is built again, ms.
 LightLaneGalleryView.RESIZE_DELAY_MS = 200;
 LightLaneGalleryView.RUNNER        = 'runner';

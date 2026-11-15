@@ -82,7 +82,10 @@ function run() {
         c.check('tier ' + tier + ': no coin on a block or a gap', (stats.badCoins === 0), stats.badCoins + ' misplaced');
         c.check('tier ' + tier + ': only the catalogue of the tier', (stats.outOfTier === 0), stats.outOfTier + ' above it');
         if (tier >= 3) {
-            c.check('tier ' + tier + ': enemies laid, their reserved lanes clear', ((stats.enemies > 0) && (stats.inReserve === 0)), stats.enemies + ' enemies, ' + stats.inReserve + ' inside');
+            c.check('tier ' + tier + ': enemies laid, their reserved lanes clear (a stalker\'s destination too)', ((stats.enemies > 0) && (stats.inReserve === 0)), stats.enemies + ' enemies, ' + stats.inReserve + ' inside');
+            // Past the meeting point only: a coin line laid before a later row's bike may end in its first metres (user
+            // decision: only the corridor's and the arc's coins are kept out).
+            c.check('tier ' + tier + ': no coin in a reservation past its meeting point', (stats.coinsInReserve === 0), stats.coinsInReserve + ' inside');
         }
         if (tier >= 6) {
             c.check('tier ' + tier + ': bridled for the Sentinel: its patterns only, no section end', ((stats.bridled > 0) && (stats.badBridled === 0) && (stats.endInBridle === 0)), stats.bridled + ' rows, ' + stats.badBridled + ' wrong, ' + stats.endInBridle + ' ends inside');
@@ -113,7 +116,7 @@ function run() {
 // The rows of a locked tier: every element and section checked, the draws recorded.
 function lockedRun(Generator, Entity, Tuning, Patterns, tier) {
     const stats = {rows: 0, empty: 0, offGrid: 0, badHoles: 0, offTrack: 0, inWarning: 0, badSections: 0, sections: 0, fives: 0, twoFives: 0,
-        repeats: 0, badCoins: 0, outOfTier: 0, observed: new Map(), expected: new Map(), enemies: 0, inReserve: 0, bridled: 0, badBridled: 0, endInBridle: 0};
+        repeats: 0, badCoins: 0, outOfTier: 0, observed: new Map(), expected: new Map(), enemies: 0, inReserve: 0, coinsInReserve: 0, bridled: 0, badBridled: 0, endInBridle: 0};
     for (const seed of SEEDS) {
         const generator = new Generator().lockTier(tier).reset(seed, 0, null);
         const ids       = [];
@@ -223,6 +226,12 @@ function checkEntity(generator, entity, Entity, Tuning, stats) {
     if (!entity.isObstacle()) {
         if (entity.getKind() === Entity.COIN) {
             for (const other of generator.getActive()) {
+                if (other.isEnemy() && ((other.getLane() === lane) || (other.getToLane() === lane)) && (z > other.getZ()) && (z < (other.getZ() + Tuning.ENEMY_RESERVE[1]))) {
+                    stats.coinsInReserve++;
+                    break;
+                }
+            }
+            for (const other of generator.getActive()) {
                 if (other.isObstacle() && (other.getLane() === lane) && ((other.getKind() === Entity.BLOCK) || (other.getKind() === Entity.GAP)) && (z >= other.getZ()) && (z <= other.getEnd())) {
                     stats.badCoins++;
                     break;
@@ -235,14 +244,18 @@ function checkEntity(generator, entity, Entity, Tuning, stats) {
     }
     const cells = (z / Tuning.CELL);
     stats.offGrid += ((Math.abs(cells - Math.round(cells)) > 1e-6) ? 1 : 0);
-    // An enemy's lanes over its reservation: no other element; an element inside an enemy's laid before.
+    // An enemy's lanes over its reservation: no other element; an element inside an enemy's laid before (an enemy: its
+    // two lanes over its own reservation).
     const [before, after] = Tuning.ENEMY_RESERVE;
+    const mine  = [lane, ((entity.isEnemy()) ? entity.getToLane() : lane)];
+    const from  = ((entity.isEnemy()) ? (z + before) : z);
+    const till  = ((entity.isEnemy()) ? (z + after) : entity.getEnd());
     for (const other of generator.getActive()) {
         if (!other.isEnemy() || (other === entity) || !other.isObstacle()) {
             continue;
         }
         const lanes = [other.getLane(), other.getToLane()];
-        if (lanes.includes(lane) && (z < (other.getZ() + after)) && (entity.getEnd() > (other.getZ() + before))) {
+        if (mine.some((l) => lanes.includes(l)) && (from < (other.getZ() + after)) && (till > (other.getZ() + before))) {
             stats.inReserve++;
         }
     }

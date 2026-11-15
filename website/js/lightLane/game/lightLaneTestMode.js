@@ -141,10 +141,7 @@ class LightLaneTestMode {
                     .sort((a, b) => (a.time - b.time));
                 break;
             case 'speed':
-                this._speed = Number(value);
-                if (!Number.isFinite(this._speed) || (this._speed < 0)) {
-                    throw new Error('LightLaneTestMode - bad speed ' + value);
-                }
+                this._speed = LightLaneTestMode._number(value, name);
                 break;
             case 'lod':
                 this._lod = true;
@@ -173,29 +170,41 @@ class LightLaneTestMode {
         };
     }
 
-    // "<time>:<L|R|J|S>".
+    // "<time>:<L|R|J|S>", nothing more.
     static _order(text) {
-        const [time, letter] = text.split(':');
-        const order = ((letter in LightLaneTestMode.ORDERS) ? LightLaneCommandSampler[LightLaneTestMode.ORDERS[letter]] : undefined);
-        const at    = Number(time);
-        if ((order === undefined) || !Number.isFinite(at)) {
+        const parts  = text.split(':');
+        const letter = parts[1];
+        const order  = (((parts.length === 2) && Object.hasOwn(LightLaneTestMode.ORDERS, letter)) ? LightLaneCommandSampler[LightLaneTestMode.ORDERS[letter]] : undefined);
+        if ((order === undefined) || !LightLaneTestMode.NUMBER.test(parts[0])) {
             throw new Error('LightLaneTestMode - bad script entry ' + text);
         }
 
-        return {time: at, order: order};
+        return {time: Number(parts[0]), order: order};
     }
 
+    // Written out in decimal digits (an empty value is refused, not read as 0).
     static _integer(text, name) {
-        const value = Number(text);
-        if (!Number.isInteger(value)) {
+        if (!LightLaneTestMode.INTEGER.test(text)) {
             throw new Error('LightLaneTestMode - bad ' + name + ' ' + text);
         }
 
-        return value;
+        return Number(text);
+    }
+
+    // A number ≥ 0 in decimal digits.
+    static _number(text, name) {
+        if (!LightLaneTestMode.NUMBER.test(text)) {
+            throw new Error('LightLaneTestMode - bad ' + name + ' ' + text);
+        }
+
+        return Number(text);
     }
 }
 
 LightLaneTestMode.PARAMETER   = 'test';
+// The values' forms: an integer (a tier, a seed within 32 bits, an offset), a number ≥ 0 (a speed, a time).
+LightLaneTestMode.INTEGER     = /^-?\d{1,9}$/;
+LightLaneTestMode.NUMBER      = /^\d{1,6}(\.\d+)?$/;
 LightLaneTestMode.LOCAL_HOSTS = Object.freeze(['localhost', '127.0.0.1']);
 // Script letters → the names of the orders' constants (LightLaneCommandSampler, read when a script is parsed).
 LightLaneTestMode.ORDERS      = Object.freeze({L: 'LEFT', R: 'RIGHT', J: 'JUMP', S: 'SLIDE'});

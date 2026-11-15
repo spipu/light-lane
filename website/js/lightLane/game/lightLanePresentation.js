@@ -49,9 +49,14 @@ class LightLanePresentation {
         this._events       = [];      // the runner's clip events of a frame (footsteps: the sound, step 14)
         this._bloom        = {glowDepthShading: LightLaneTuning.BLOOM_GLOW_DEPTH_SHADING, glowFar: LightLaneTuning.BLOOM_GLOW_FAR,
             glowFarMax: LightLaneTuning.BLOOM_GLOW_FAR_MAX};   // RendererWebglBloom.DEFAULTS otherwise
-        this._facing       = [0, 0, 0];
+        this._facing       = [0, 0, 0];   // the runner's rotation, degrees: facing +z, its lean in z
         this._enemyAngles  = [0, 0, 0];   // an enemy's rotation, degrees, written in place
-        this._trailAngles  = [0, 0, 0];   // a trail piece's rotation, degrees, written in place   // the runner's rotation, degrees: facing +z, its lean in z
+        this._trailAngles  = [0, 0, 0];   // a trail piece's rotation, degrees, written in place
+        this._coinAngles   = [0, 0, 0];   // a coin's spin, degrees, written in place
+        this._sweepFrame   = 0;           // the frame whose views are kept (the others released)
+        // Bound once (no closure a frame): a view not drawn this frame goes back to its pool.
+        this._sweepView    = (view, entity) => this._sweepOut(this._views, view, entity);
+        this._sweepArrow   = (view, entity) => this._sweepOut(this._arrows, view, entity);
         // The runner's light: its position moved in place every frame.
         this._lightRange   = (LightLaneTuning.RUNNER_LIGHT_RANGE * LightLaneTuning.RUNNER_HEIGHT / 2);
         this._light        = new Light([...LightLaneTuning.RUNNER_LIGHT_COLOR], this._lightRange, [0, 0, 0]);
@@ -116,6 +121,17 @@ class LightLanePresentation {
     setShieldSource(source) {
         this._shield = source;
         this._hud.setShieldSource(source);
+
+        return this;
+    }
+
+    /**
+     * @param {{score: int, distance: int, coins: int, time: int|null}|null} best - the record, kept for a HUD built again
+     *        (a renderer changed in the pause)
+     */
+    setBest(best) {
+        this._best = best;
+        this._hud.setBest(best);
 
         return this;
     }
@@ -525,7 +541,7 @@ class LightLanePresentation {
             }
             // A block shows its side crosses on the side the camera sees.
             if (entity.getKind() === LightLaneEntity.BLOCK) {
-                code += ((this._camera.getX() < entity.getX()) ? LightLaneModels.BLOCK_SIDES[0][0] : LightLaneModels.BLOCK_SIDES[1][0]);
+                code = LightLaneModels.blockSideCode(entity.getCode(), ((this._camera.getX() < entity.getX()) ? -1 : 1));
             }
             const coin   = (entity.getKind() === LightLaneEntity.COIN);
             const since  = (runTime - entity.getTakenAt());
@@ -541,14 +557,9 @@ class LightLanePresentation {
             engine.drawInstance(view.instance);
         }
         // The views of the elements gone (retired, or a coin faded out).
-        for (const views of [this._views, this._arrows]) {
-            for (const [entity, view] of views) {
-                if (view.frame !== frame) {
-                    this._release(view);
-                    views.delete(entity);
-                }
-            }
-        }
+        this._sweepFrame = frame;
+        this._views.forEach(this._sweepView);
+        this._arrows.forEach(this._sweepArrow);
     }
 
     // An enemy at its moving front; a stalker announcing its move: its floor arrow on the lane it goes to, before it.
@@ -602,15 +613,14 @@ class LightLanePresentation {
             this._engine.drawInstance(piece.instance);
             s += along;
         }
-        this._drawTrailTail(entity, (start + s), ((start + LightLaneTuning.TRAIL_LENGTH) - (start + s)));
+        // Its tail always ends where the deadly trail does (a body's last short piece may run up to one into it).
+        this._drawTrailTail(entity, (start + body));
     }
 
-    // The trail's last TRAIL_TAIL metres, its end rounded like the wheel (user request): one piece on a straight run, else
-    // slice by slice along the curve.
-    _drawTrailTail(entity, from, length) {
-        if (length <= LightLanePresentation.EPSILON) {
-            return;
-        }
+    // The trail's last TRAIL_TAIL metres from `from`, its end rounded like the wheel (user request): one piece on a
+    // straight run, else all its slices along the curve.
+    _drawTrailTail(entity, from) {
+        const length   = LightLaneTuning.TRAIL_TAIL;
         const x0       = entity.trailX(from);
         const straight = ((Math.abs(entity.trailX(from + length) - x0) < LightLanePresentation.EPSILON) && (Math.abs(entity.trailX(from + (length / 2)) - x0) < LightLanePresentation.EPSILON));
         const angles   = this._trailAngles;
@@ -618,18 +628,18 @@ class LightLanePresentation {
             const piece = this._trailPiece(LightLaneModels.TRAIL_TAIL);
             angles[1] = 0;
             piece.instance.setRotation(angles);
-            piece.instance.placeAt(x0, 0, (from + (LightLaneTuning.TRAIL_TAIL / 2)));
+            piece.instance.placeAt(x0, 0, (from + (length / 2)));
             this._engine.drawInstance(piece.instance);
             return;
         }
         const slice = (LightLaneTuning.TRAIL_TAIL / LightLaneTuning.TRAIL_TAIL_SLICES);
         let s       = 0;
-        for (let k = 0; (k < LightLaneTuning.TRAIL_TAIL_SLICES) && (s < (length - LightLanePresentation.EPSILON)); k++) {
+        for (let k = 0; k < LightLaneTuning.TRAIL_TAIL_SLICES; k++) {
             const xa    = entity.trailX(from + s);
             const slope = ((entity.trailX(from + s + slice) - xa) / slice);
             const along = (slice / Math.sqrt(1 + (slope * slope)));
             const xb    = entity.trailX(from + s + along);
-            const code  = (LightLaneModels.TRAIL_TAIL + k);
+            const code  = LightLaneModels.trailTailCode(k);
             const piece = this._trailPiece(code);
             angles[1] = (Math.atan2((xb - xa), along) * LightLanePresentation.HALF_TURN / Math.PI);
             piece.instance.setRotation(angles);
@@ -755,7 +765,8 @@ class LightLanePresentation {
         // Picked up, it goes on with the runner, just before it, rising and fading (art § 7).
         const z     = ((entity.isTaken()) ? (this._simulation.getZ() + Math.max(entity.getTakenDz(), LightLaneTuning.COIN_TAKE_AHEAD)) : entity.getZ());
         instance.placeAt(entity.getX(), ((entity.getY() - LightLaneTuning.SHAPES.COIN.halfHeight) + bob + (LightLaneTuning.COIN_TAKE_RISE * taken)), z);
-        instance.setRotation([0, ((LightLaneTuning.COIN_SPIN * this._time) % LightLanePresentation.FULL_TURN), 0]);
+        this._coinAngles[1] = ((LightLaneTuning.COIN_SPIN * this._time) % LightLanePresentation.FULL_TURN);
+        instance.setRotation(this._coinAngles);
         instance.setRenderLight(1 - taken);
     }
 
@@ -801,10 +812,25 @@ class LightLanePresentation {
         const size  = (LightLaneTuning.TILE_LENGTH / 2);
         const first = Math.floor((z - LightLaneTuning.GROUND_SEEN_BEHIND) / size);
         const last  = Math.floor((z + reach + LightLaneTuning.FINE_AHEAD_MARGIN) / size);
-        const level = (h) => (((h >= first) && (h <= last)) ? 'F' : ((h === (last + 1)) ? 'M' : 'P'));
-        const code  = (level(2 * row) + level((2 * row) + 1));
+        const level = LightLanePresentation._halfLevel;
 
-        return ((code === 'PP') ? null : code);
+        return LightLanePresentation.LIT_CODES[level((2 * row), first, last)][level(((2 * row) + 1), first, last)];
+    }
+
+    // A half tile's level: 0 fine (F), 1 the coarser one after (M), 2 plain (P).
+    static _halfLevel(half, first, last) {
+        if ((half >= first) && (half <= last)) {
+            return 0;
+        }
+
+        return ((half === (last + 1)) ? 1 : 2);
+    }
+
+    _sweepOut(views, view, entity) {
+        if (view.frame !== this._sweepFrame) {
+            this._release(view);
+            views.delete(entity);
+        }
     }
 
     _acquire(code) {
@@ -877,3 +903,5 @@ LightLanePresentation.EPSILON         = 1e-6;
 LightLanePresentation.LOW             = 'low';
 // The bloom works with the WebGL renderer only.
 LightLanePresentation.BLOOM_RENDERER  = 'webgl';
+// A tile's LightLaneModels.LIT_LEVELS variant by its halves' levels [F, M, P][F, M, P]; null: both plain.
+LightLanePresentation.LIT_CODES       = Object.freeze(['F', 'M', 'P'].map((a) => Object.freeze(['F', 'M', 'P'].map((b) => (((a + b) === 'PP') ? null : (a + b))))));

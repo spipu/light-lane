@@ -134,6 +134,17 @@ function run() {
     }
     c.check('shield: the death counted, still running', ((shielded.getShieldDeaths() === 1) && (shielded.getState() === Simulation.RUNNING)));
 
+    // One collision a step (gameplay § 5.1): an element and a sweep met on the same step make one stumble, not a trip.
+    const twice = new Simulation().newRun({seed: 1, track: [row('S6')]});
+    twice._stumbled = false;
+    const firstKills  = twice._stumble(true);
+    const secondKills = twice._stumble(false);
+    let stumbles = 0;
+    for (let k = 0; k < twice.getEvents().getCount(); k++) {
+        stumbles += ((twice.getEvents().get(k).type === 'stumble') ? 1 : 0);
+    }
+    c.check('one collision a step: two stumbles on one step make one, no trip', (!firstKills && !secondKills && (twice.getDeath() === null) && (stumbles === 1)), stumbles + ' stumble event(s)');
+
     // Dying, then over: 1.0 s for a shock.
     const over = play(['S2'], [], 80);
     c.check('shock: the game is over after dying', (over.sim.getState() === Simulation.GAME_OVER));

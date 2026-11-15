@@ -113,7 +113,16 @@ class LightLaneModels {
      * @returns {string} the code of its object
      */
     static blockCode(code) {
-        return ('block' + code.slice(1));
+        return LightLaneModels.BLOCK_CODES[code];
+    }
+
+    /**
+     * @param {string} code - B3, B6, B10, B16
+     * @param {int}    side - the side its crosses show: −1 left, +1 right
+     * @returns {string} the code of its object with those crosses (read from a table: no string built a frame)
+     */
+    static blockSideCode(code, side) {
+        return LightLaneModels.BLOCK_SIDE_CODES[code][(side < 0) ? 0 : 1];
     }
 
     /**
@@ -216,7 +225,15 @@ class LightLaneModels {
      * @returns {string} the code of a piece of a bike's trail
      */
     static trailCode(band, length) {
-        return (LightLaneModels.TRAIL + band + '_' + length);
+        return LightLaneModels.TRAIL_CODES[band][(length === LightLaneTuning.TRAIL_PIECE_LONG) ? 0 : 1];
+    }
+
+    /**
+     * @param {int} slice - 0 to TRAIL_TAIL_SLICES − 1
+     * @returns {string} the code of a slice of a trail's tail
+     */
+    static trailTailCode(slice) {
+        return LightLaneModels.TRAIL_TAIL_CODES[slice];
     }
 
     /**
@@ -246,10 +263,8 @@ class LightLaneModels {
                 return LightLaneModels.COIN;
             case LightLaneEntity.PROWLER:
                 return LightLaneModels.PROWLER;
-            case LightLaneEntity.STALKER: {
-                const suffix = (((entity.getToLane() < entity.getLane()) ? LightLaneModels.ARROW_SIDES[0][0] : LightLaneModels.ARROW_SIDES[1][0]));
-                return (LightLaneModels.STALKER + suffix + ((entity.isWarning() && blink) ? LightLaneModels.WARN : ''));
-            }
+            case LightLaneEntity.STALKER:
+                return LightLaneModels.STALKER_CODES[(entity.getToLane() < entity.getLane()) ? 0 : 1][(entity.isWarning() && blink) ? 1 : 0];
             default:
                 return null;
         }
@@ -870,7 +885,6 @@ class LightLaneModels {
         return b.data();
     }
 
-    // The line along the right edge of the rightmost lane, alone.
     // The track's right edge line along a tile; cut at the hole of a gap in the rightmost lane (no rail over the void).
     static _tileEdge(lineSize, gap) {
         const w     = (LightLaneTuning.LANE_WIDTH / 2);
@@ -929,8 +943,6 @@ LightLaneModels.STRIKE_BEAM = 'strikeBeam';
 LightLaneModels.SWEEP_WARN = 'sweepWarn';
 LightLaneModels.SWEEP      = 'sweep';
 LightLaneModels.SWEEP_LANES = Object.freeze(['3', '5']);
-// Degrees to radians.
-LightLaneModels.HALF_TURN  = 180;
 // The enemies' shell: the roundness of its sections (1 an ellipse, lower squarer) and the sine above which a face
 // counts as a top (or below its negative, a bottom).
 LightLaneModels.ROUND      = 0.6;
@@ -954,3 +966,11 @@ LightLaneModels.BLOCK_SIDES = Object.freeze([['L', -1], ['R', 1]]);
 LightLaneModels.GAPS       = Object.freeze(['X3', 'X5']);
 // One shard object a colour (art § 5.2): name → palette code.
 LightLaneModels.SHARD_COLORS = Object.freeze({Player: 'PLAYER', Danger: 'DANGER'});
+// The codes read every frame, built once (no string a frame): a block's [B3…] (with its crosses on the left, on the
+// right), a stalker's [to the left, to the right][plain, warning], a trail's [band][long, short] pieces, its tail's slices.
+LightLaneModels.BLOCK_CODES      = Object.freeze(Object.fromEntries(LightLaneModels.BLOCKS.map((code) => [code, ('block' + code.slice(1))])));
+LightLaneModels.BLOCK_SIDE_CODES = Object.freeze(Object.fromEntries(LightLaneModels.BLOCKS.map((code) => [code,
+    Object.freeze(LightLaneModels.BLOCK_SIDES.map(([suffix]) => (LightLaneModels.BLOCK_CODES[code] + suffix)))])));
+LightLaneModels.STALKER_CODES    = Object.freeze(LightLaneModels.ARROW_SIDES.map(([suffix]) => Object.freeze([(LightLaneModels.STALKER + suffix), (LightLaneModels.STALKER + suffix + LightLaneModels.WARN)])));
+LightLaneModels.TRAIL_CODES      = Object.freeze([...Array(LightLaneTuning.TRAIL_BANDS).keys()].map((band) => Object.freeze([LightLaneTuning.TRAIL_PIECE_LONG, LightLaneTuning.TRAIL_PIECE_SHORT].map((length) => (LightLaneModels.TRAIL + band + '_' + length)))));
+LightLaneModels.TRAIL_TAIL_CODES = Object.freeze([...Array(LightLaneTuning.TRAIL_TAIL_SLICES).keys()].map((k) => (LightLaneModels.TRAIL_TAIL + k)));

@@ -46,6 +46,18 @@ class TestModeBench {
             refused = true;
         }
         this._check('a bad script entry is refused', refused);
+        // Empty or malformed values refused too (never read as 0), extra parts too.
+        const bad = ['tier:', 'seed', 'speed', 'speed:-1', 'seed:1e3', 'seed:0x10', 'track:S1@', 'script::J', 'script:1:J:x', 'script:1:constructor'];
+        const accepted = bad.filter((option) => {
+            try {
+                new this._TestMode('localhost', '?test=' + option);
+                return true;
+            } catch (error) {
+                return false;
+            }
+        });
+        this._check('empty or malformed values refused (' + bad.join(' ') + ')' + ((accepted.length > 0) ? (': accepted ' + accepted.join(' ')) : ''), (accepted.length === 0));
+        this._check('speed: decimals accepted', (new this._TestMode('localhost', '?test=speed:12.5').getSpeed() === 12.5));
 
         return this._failures;
     }

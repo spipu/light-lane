@@ -22,7 +22,7 @@ class LightLaneRunScore {
      * @param {boolean} doubled - the double score is on
      */
     addDistance(metres, doubled) {
-        this._distancePoints += (metres * ((doubled) ? LightLaneRunScore.DOUBLE : 1));
+        this._distancePoints += (metres * ((doubled) ? LightLaneTuning.SCORE_DOUBLE : 1));
 
         return this;
     }
@@ -33,7 +33,7 @@ class LightLaneRunScore {
      */
     addCoin(points, doubled) {
         this._coins++;
-        this._coinPoints += (points * ((doubled) ? LightLaneRunScore.DOUBLE : 1));
+        this._coinPoints += (points * ((doubled) ? LightLaneTuning.SCORE_DOUBLE : 1));
 
         return this;
     }
@@ -61,5 +61,3 @@ class LightLaneRunScore {
         return this._coins;
     }
 }
-
-LightLaneRunScore.DOUBLE = 2;

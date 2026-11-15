@@ -126,7 +126,7 @@ class LightLaneSentinel {
         }
         this._attackT += dt;
 
-        return ((this._attack === LightLaneSentinel.STRIKE) ? this._strike(runner, events) : this._sweep(runner));
+        return ((this._attack === LightLaneSentinel.STRIKE) ? this._strike(dt, runner, events) : this._sweep(runner));
     }
 
     isActive() {
@@ -209,7 +209,7 @@ class LightLaneSentinel {
     }
 
     // Marked STRIKE_WARN, then the column for STRIKE_TIME, then its trace for STRIKE_TRACE.
-    _strike(runner, events) {
+    _strike(dt, runner, events) {
         const fire = LightLaneTuning.STRIKE_WARN;
         const t    = this._attackT;
         if (t >= (fire + LightLaneTuning.STRIKE_TIME + LightLaneTuning.STRIKE_TRACE)) {
@@ -219,7 +219,8 @@ class LightLaneSentinel {
         if ((t < fire) || (t >= (fire + LightLaneTuning.STRIKE_TIME)) || this._hit) {
             return null;
         }
-        if (!this._hit && ((t - LightLaneTuning.STEP_SECONDS) < fire)) {
+        // Its first step of fire (the step's own length: a step that crossed the warning's end).
+        if (!this._hit && ((t - dt) < fire)) {
             events.add(LightLaneEvents.STRIKE);
         }
         const x    = runner.getX();

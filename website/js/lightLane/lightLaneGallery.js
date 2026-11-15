@@ -48,7 +48,8 @@ class LightLaneGallery {
 
     /**
      * @param {int} mask - items passed, a bit each in the order of GALLERY_ITEMS (LightLaneSimulation.getPassed)
-     * @returns {Promise<void>} those not unlocked yet are (at once in memory, then in the store)
+     * @returns {Promise<void>} those not unlocked yet are, once kept in the store: a write that fails leaves them locked,
+     *          so a later call tries again (never shown unlocked for the session and gone after a reload)
      */
     async unlock(mask) {
         const date  = new Date().toISOString();
@@ -56,10 +57,10 @@ class LightLaneGallery {
         if (added.length === 0) {
             return;
         }
-        added.forEach((item) => this._unlocked.add(item));
         if (this._database !== null) {
             await this._database.putMulti(added.map((item) => ({storeName: LightLaneDatabaseSchema.GALLERY, record: {item: item, date: date}})));
         }
+        added.forEach((item) => this._unlocked.add(item));
     }
 
     async clear() {

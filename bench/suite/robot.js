@@ -5,6 +5,8 @@
  *
  * Length: LIGHT_LANE_ROBOT_METERS metres per seed and tier (300 by default, a few minutes for the whole suite); the
  * full campaign of the spec (5 seeds × 1 000 rows) is about 30 000 m: LIGHT_LANE_ROBOT_METERS=30000.
+ * Then free runs, as the game plays them: not locked (the speed rising, the tiers in turn, the Sentinel's bridles),
+ * updated by frames of FRAME seconds (a slow phone's, the engine's cap) instead of one step at a time.
  */
 
 const {load, Checker} = require('../lib/gameContext.js');
@@ -12,6 +14,11 @@ const {load, Checker} = require('../lib/gameContext.js');
 const SEEDS  = [1, 2, 3, 4, 5];
 const TIERS  = [0, 1, 2, 3, 4, 5, 6, 7, 21];
 const METERS = Number(process.env.LIGHT_LANE_ROBOT_METERS ?? 300);
+// Free runs: from FREE_TIER (the bikes, then the Sentinel and the trails ahead), FREE_METERS each.
+const FREE_SEEDS  = [1, 2];
+const FREE_TIER   = 5;
+const FREE_METERS = 2000;
+const FRAME       = 0.05;
 
 function run() {
     const game       = load();
@@ -41,6 +48,26 @@ function run() {
         }
         c.check('tier ' + tier + ': ' + SEEDS.length + ' seeds × ' + METERS + ' m, no death', (deaths.length === 0), deaths.join(', '));
     }
+
+    const deaths = [];
+    for (const seed of FREE_SEEDS) {
+        const sim   = new Simulation().newRun({seed: seed, tier: FREE_TIER, shield: true});
+        const robot = new Robot().reset();
+        const out   = [];
+        const start = sim.getZ();
+        let counted = 0;
+        while (sim.getZ() < (start + FREE_METERS)) {
+            out.length = 0;
+            robot.update(sim, out);
+            sim.advance(FRAME, out);
+            sim.getEvents().clear();
+            if (sim.getShieldDeaths() !== counted) {
+                counted = sim.getShieldDeaths();
+                deaths.push('seed ' + seed + ' z ' + sim.getZ().toFixed(1));
+            }
+        }
+    }
+    c.check('free runs from tier ' + FREE_TIER + ': ' + FREE_SEEDS.length + ' seeds × ' + FREE_METERS + ' m by frames of ' + (FRAME * 1000) + ' ms, no death', (deaths.length === 0), deaths.join(', '));
 
     return c.failures;
 }

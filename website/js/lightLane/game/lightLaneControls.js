@@ -44,12 +44,16 @@ class LightLaneControls {
     }
 
     /**
-     * Rebuilds the touch controls into the display of a screen built again (a renderer changed in the pause).
+     * Rebuilds the touch controls into the display of a screen built again (a renderer changed in the pause): the
+     * virtual gamepad, and the swipes (the old display is out of the page, its listeners would never fire again).
      *
      * @param {HTMLElement} display
      */
     bindDisplay(display) {
         this._virtualGamepad.bindDisplay(display);
+        this._swipe.detach();
+        this._swipe = new AppInputSwipe(display);
+        this._swipe.attach();
 
         return this;
     }

@@ -25,7 +25,7 @@ class LightLaneHud extends AbstractHud {
         this._numbers    = new Intl.NumberFormat(appTranslator.getLocale());
         this._metres     = null;
         this._els        = {};
-        this._shown      = {};
+        this._shown      = LightLaneHud._emptyShown();
     }
 
     /**
@@ -103,7 +103,7 @@ class LightLaneHud extends AbstractHud {
     refreshTexts() {
         this._numbers = new Intl.NumberFormat(appTranslator.getLocale());
         this._metres  = new Intl.NumberFormat(appTranslator.getLocale(), {style: 'unit', unit: 'meter', unitDisplay: 'short', maximumFractionDigits: 0});
-        this._shown   = {};
+        this._shown   = LightLaneHud._emptyShown();
         if (this._els.root === undefined) {
             return this;
         }
@@ -189,8 +189,8 @@ class LightLaneHud extends AbstractHud {
     }
 
     _text(name, text) {
-        if (this._shown[name + '.text'] !== text) {
-            this._shown[name + '.text'] = text;
+        if (this._shown.text[name] !== text) {
+            this._shown.text[name] = text;
             this._els[name].textContent = text;
         }
     }
@@ -198,10 +198,10 @@ class LightLaneHud extends AbstractHud {
     // A shown number, formatted only when it changes (Intl.NumberFormat at every frame allocates its text): by
     // `format`, or as mm:ss when it is null (a time: « – » when absent).
     _number(name, value, format) {
-        if (this._shown[name + '.value'] === value) {
+        if (this._shown.value[name] === value) {
             return;
         }
-        this._shown[name + '.value'] = value;
+        this._shown.value[name] = value;
         if (format !== null) {
             this._text(name, format.format(value));
             return;
@@ -219,23 +219,28 @@ class LightLaneHud extends AbstractHud {
     }
 
     _mark(name, beaten) {
-        if (this._shown[name + '.beaten'] !== beaten) {
-            this._shown[name + '.beaten'] = beaten;
+        if (this._shown.beaten[name] !== beaten) {
+            this._shown.beaten[name] = beaten;
             this._els[name].classList.toggle('light-lane-hud-beaten', beaten);
         }
     }
 
     _style(name, property, value) {
-        const key = (name + '.' + property);
-        if (this._shown[key] !== value) {
-            this._shown[key] = value;
+        const shown = (this._shown.style[name] ??= {});
+        if (shown[property] !== value) {
+            shown[property] = value;
             this._els[name].style[property] = value;
         }
     }
 
+    // What is shown, by kind then by element (no key built a frame).
+    static _emptyShown() {
+        return {text: {}, value: {}, beaten: {}, style: {}, display: {}};
+    }
+
     _display(name, visible) {
-        if (this._shown[name + '.display'] !== visible) {
-            this._shown[name + '.display'] = visible;
+        if (this._shown.display[name] !== visible) {
+            this._shown.display[name] = visible;
             this._els[name].style.display = ((visible) ? '' : 'none');
         }
     }

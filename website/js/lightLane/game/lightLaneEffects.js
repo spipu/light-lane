@@ -5,6 +5,7 @@
  */
 class LightLaneEffects {
     constructor() {
+        this._angles = [0, 0, 0];   // a shard's rotation, degrees, written in place
         this._shards = [];   // {instance, colour, life, x, y, z, vx, vy, vz, spin, angle}
         this._flash  = 0;
         this._flashFrom = 0;
@@ -115,7 +116,9 @@ class LightLaneEffects {
                 continue;
             }
             shard.instance.placeAt(shard.x, shard.y, shard.z);
-            shard.instance.setRotation([shard.angle, shard.angle * LightLaneEffects.SPIN_SKEW, 0]);
+            this._angles[0] = shard.angle;
+            this._angles[1] = (shard.angle * LightLaneEffects.SPIN_SKEW);
+            shard.instance.setRotation(this._angles);
             shard.instance.setRenderLight(shard.life / LightLaneTuning.SHARD_LIFE);
             engine.drawInstance(shard.instance);
         }

@@ -1,8 +1,8 @@
 /**
  * Static suite: the bootstrap definition against the disk. Every file served from website/ is declared in
  * js/libBootstrap.json (the shell precached by the service worker aside), every declared file exists once, and every
- * class is declared after the class it extends (a file before those that use it at load time); no method defined twice
- * in a class (the second silently replaces the first). Every translation in the 4 languages, with the same placeholders.
+ * class is declared after the class it extends (a file before those that use it at load time); no method or accessor
+ * defined twice in a class (the second silently replaces the first). Every translation in the 4 languages, with the same placeholders.
  */
 
 const fs   = require('fs');
@@ -41,13 +41,14 @@ class BootstrapBench {
         return this._failures;
     }
 
-    // A method (static or not) defined twice at the class's level (4 spaces in) in one file: the second replaces the first.
+    // A method (static or not, an accessor too) defined twice at the class's level (4 spaces in) in one file — one class a
+    // file in this project: the second silently replaces the first. Its signature may run over several lines.
     _twiceDefined(files) {
         const twice = [];
         for (const file of files) {
             const seen = new Set();
-            for (const match of this._read(file).matchAll(/^    (static |async |static async )?([A-Za-z_$][\w$]*)\(.*\) \{$/gm)) {
-                const key = (((match[1] ?? '').includes('static')) ? 'static ' : '') + match[2];
+            for (const match of this._read(file).matchAll(/^    (static\s+)?(async\s+)?((?:get|set)\s+)?([A-Za-z_$][\w$]*)\s*\(/gm)) {
+                const key = ((match[1] !== undefined) ? 'static ' : '') + ((match[3] !== undefined) ? match[3].trim() + ' ' : '') + match[4];
                 if (seen.has(key)) {
                     twice.push(file + ': ' + key);
                 }

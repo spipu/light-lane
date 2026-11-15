@@ -111,10 +111,11 @@ class LightLaneGame {
             delete window[LightLaneGame.TEST_HANDLE];
         }
         document.removeEventListener('visibilitychange', this._onVisibility);
-        if (this._pauseModal !== null) {
+        // A display is kept as soon as it is built: gone even when its modal failed to open.
+        if (this._pauseDisplay !== null) {
             this._closePause();
         }
-        if (this._overModal !== null) {
+        if (this._overDisplay !== null) {
             this._closeGameOver();
         }
         this._presentation.teardown();
@@ -155,8 +156,8 @@ class LightLaneGame {
         this._pauseModal   = new LightLanePauseModal(this._pauseDisplay)
             .setOnResume(() => this._guard(this._leavePause))
             .setOnRestart(() => this._guard(this._restart))
-            .setOnQuit(() => this.quit())
-            .show();
+            .setOnQuit(() => this.quit());
+        this._pauseModal.show();
     }
 
     // The settings changed in the pause apply on resume, a renderer change on the next free frame; then the countdown
@@ -180,7 +181,7 @@ class LightLaneGame {
     }
 
     _closePause() {
-        this._pauseModal.close();
+        this._pauseModal?.close();
         this._pauseDisplay.destroy();
         this._pauseModal   = null;
         this._pauseDisplay = null;
@@ -199,6 +200,7 @@ class LightLaneGame {
 
     // The run into the 10 best scores (if it enters them), then the modal with its rank (gameplay § 12).
     _gameOver() {
+        this._unlockGallery(true);
         const simulation = this._simulation;
         const run        = {
             score:    simulation.getScore().getScore(),
@@ -239,19 +241,19 @@ class LightLaneGame {
                 this._teardown();
                 this._navigator.endGameToScores((result.entry !== null) ? result.entry.id : null);
             })
-            .setOnQuit(() => this.quit())
-            .show(result.run, ((result.entry !== null) ? result.entry.rank : null), this._best.score);
+            .setOnQuit(() => this.quit());
+        this._overModal.show(result.run, ((result.entry !== null) ? result.entry.rank : null), this._best.score);
     }
 
     _replay() {
         this._closeGameOver();
-        this._presentation.getHud().setBest(this._best);
+        this._presentation.setBest(this._best);
         this._controls.applySettings().setVirtualPadVisible(true);
         this._newRun();
     }
 
     _closeGameOver() {
-        this._overModal.close();
+        this._overModal?.close();
         this._overDisplay.destroy();
         this._overModal   = null;
         this._overDisplay = null;
@@ -311,9 +313,10 @@ class LightLaneGame {
     }
 
     // The gallery's items passed for the first time are kept at once (gameplay § 14): a run quit or crashed keeps them.
-    _unlockGallery() {
+    // A write that failed is tried again with the next item passed, and at the run's end (force).
+    _unlockGallery(force = false) {
         const passed = this._simulation.getPassed();
-        if (passed === this._passed) {
+        if ((passed === this._passed) && !force) {
             return;
         }
         this._passed = passed;
@@ -325,7 +328,12 @@ class LightLaneGame {
             method.call(this, argument);
         } catch (error) {
             console.error(error);
-            this._teardown();
+            // The menus come back with the error even if the teardown fails too.
+            try {
+                this._teardown();
+            } catch (teardownError) {
+                console.error(teardownError);
+            }
             this._navigator.gameFailed(error);
         }
     }

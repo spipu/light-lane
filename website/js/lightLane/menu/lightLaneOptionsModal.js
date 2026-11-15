@@ -12,16 +12,6 @@ class LightLaneOptionsModal extends AppMenuSettingsModal {
 
         this._gamepad      = new AppInputGamepad();
         this._shownDevices = null;
-        this._onApply      = null;
-    }
-
-    /**
-     * @param {function()|null} callback - called after a setting changed (the game applies the controls and sound)
-     */
-    setOnApply(callback) {
-        this._onApply = callback;
-
-        return this;
     }
 
     show() {
@@ -120,11 +110,9 @@ class LightLaneOptionsModal extends AppMenuSettingsModal {
 
     // --- Settings hooks ---
 
+    // The language at once; the controls and the sound are applied by the game when the pause is left.
     _applySettings() {
         lightLaneSettings.applyToTranslator(appTranslator);
-        if (this._onApply !== null) {
-            this._onApply();
-        }
     }
 
     _rebuildsPage(definition) {

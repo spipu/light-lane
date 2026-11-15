@@ -48,7 +48,6 @@ class LightLaneTrackGenerator {
         this._placements  = Array.from({length: LightLaneTrackGenerator.PLACEMENTS_MAX}, () => ({pattern: null, mirror: false, offset: 0, z: 0, weight: 0}));
         this._placementCount = 0;
         this._row         = {pattern: null, lanes: null, offset: 0, z: 0};    // the row being laid
-        this._lanesFree   = [];      // lanes, reused by the coins and the bonus
         this._probe       = new LightLaneEntity();   // a bike of the row being checked, for its trail's path
     }
 
@@ -750,27 +749,30 @@ class LightLaneTrackGenerator {
     }
 
     /**
-     * An element clear of the enemies' reservations (§ 5): none of an enemy already laid covers its lane over its
-     * length; an enemy's own lanes (its lane, its destination) exist all along its reservation and hold nothing else
-     * (laid before, or of its row).
+     * An element clear of the enemies' reservations (§ 5): none of an enemy already laid covers its lanes (an enemy's:
+     * its lane and its destination, over its own reservation) over its length; an enemy's own lanes exist all along its
+     * reservation and hold nothing else (laid before, or of its row).
      */
     _clearOfReservations(row, i, lane, front, end) {
         const [before, after] = LightLaneTuning.ENEMY_RESERVE;
+        const code  = row.lanes[i];
+        const enemy = LightLanePatterns.isEnemy(code);
+        const to    = (lane + ((enemy) ? (LightLaneTuning.OBSTACLES[code].side ?? 0) : 0));
+        const from  = ((enemy) ? (front + before) : front);
+        const till  = ((enemy) ? (front + after) : end);
         for (const entity of this._active) {
-            if (!entity.isEnemy() || ((entity.getZ() + before) >= end) || ((entity.getZ() + after) <= front)) {
+            if (!entity.isEnemy() || ((entity.getZ() + before) >= till) || ((entity.getZ() + after) <= from)) {
                 continue;
             }
-            if ((entity.getLane() === lane) || (entity.getToLane() === lane)) {
+            const a = entity.getLane();
+            const b = entity.getToLane();
+            if ((a === lane) || (b === lane) || (a === to) || (b === to)) {
                 return false;
             }
         }
-        const code = row.lanes[i];
-        if (!LightLanePatterns.isEnemy(code)) {
+        if (!enemy) {
             return true;
         }
-        const to   = (lane + (LightLaneTuning.OBSTACLES[code].side ?? 0));
-        const from = (front + before);
-        const till = (front + after);
         if (!this._laneSpans(lane, from, till) || !this._laneSpans(to, from, till)) {
             return false;
         }
@@ -878,7 +880,7 @@ class LightLaneTrackGenerator {
         const z0        = this._lastRowZ;
         const end       = (row.z + row.pattern.longest);
         occupancy.begin(z0, (end + LightLaneTuning.CELL));
-        this._markVoid(z0, (end + LightLaneTuning.CELL + (LightLaneOccupancy.SEARCH_MARGIN * LightLaneTuning.CELL)));
+        this._markVoid(z0, (end + LightLaneTuning.CELL));
         for (const entity of this._active) {
             if (entity.isObstacle() && ((entity.getEnd() > z0) || (entity.hasTrail() && ((entity.getZ() + LightLaneTrackGenerator.TRAIL_REACH) > z0)))) {
                 LightLaneTrackGenerator._markEntity(occupancy, entity.getCode(), entity.getLane(), entity.getZ());
@@ -1024,7 +1026,7 @@ class LightLaneTrackGenerator {
             // the lane does not exist all along (a hurdle at the start of a section of 5).
             const lane = this._laneOf(row, lanes.indexOf('H'));
             const span = (speed * LightLaneTuning.JUMP_TIME);
-            if (this._clearOfWarnings(lane, (z - span), (z + span)) && this._laneSpans(lane, (z - span), (z + span))) {
+            if (this._clearOfWarnings(lane, (z - span), (z + span)) && this._laneSpans(lane, (z - span), (z + span)) && !this._reserved(lane, (z - span), (z + span))) {
                 this._arc(lane, z, speed);
             }
             return;
@@ -1038,6 +1040,10 @@ class LightLaneTrackGenerator {
         }
         if (pattern.coins === 'centre') {
             const length = LightLaneTuning.OBSTACLES[lanes[0]].length;
+            // None in an enemy's reservation (§ 5).
+            if (this._reserved(this._laneOf(row, 1), z, (z + length))) {
+                return;
+            }
             for (let at = (z + (LightLaneTuning.COIN_SPACING / 2)); at < (z + length); at += LightLaneTuning.COIN_SPACING) {
                 this._take().setCoin(this._laneOf(row, 1), LightLaneTuning.COIN_HEIGHT, at);
             }

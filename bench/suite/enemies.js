@@ -148,7 +148,11 @@ function run() {
     c.check('trail: none before tier 7', !new Simulation().newRun({seed: 1, track: [row('E2')], speed: SPEED}).getTrack().getActive().some((e) => e.hasTrail()));
     c.check('trail: back into a prowler\'s lane just behind it: shock', (trailRun(['E2'], [{dz: -20, order: 'left'}, {dz: 10, order: 'right'}]) === 'shock'));
     c.check('trail: back into its lane past the trail: through', (trailRun(['E2'], [{dz: -20, order: 'left'}, {dz: 25, order: 'right'}]) === null));
-    c.check('trail: staying on the lane a stalker left: shock', (trailRun(['C2'], []) === 'shock'));
+    // A stalker's trail (25 m, user request) has left the lane it left by the time the runner gets there; it is deadly on
+    // its new lane, behind it.
+    c.check('trail: staying on the lane a stalker left: through (its trail has left it)', (trailRun(['C2'], []) === null));
+    c.check('trail: into a stalker\'s new lane just behind it: shock', (trailRun(['C2'], [{dz: 10, order: 'left'}]) === 'shock'));
+    c.check('trail: into a stalker\'s new lane past its trail: through', (trailRun(['C2'], [{dz: 25, order: 'left'}]) === null));
     c.check('trail: away from a stalker\'s lanes early: through', (trailRun(['C2'], [{dz: -20, order: 'right'}]) === null));
     // Over a prowler's trail in the middle lane: from the right lane to the left one, both lane changes in a jump.
     const leap   = 10;
