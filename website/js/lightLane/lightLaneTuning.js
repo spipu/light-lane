@@ -269,6 +269,9 @@ LightLaneTuning.STALKER_ARROW_SIZE  = Object.freeze([2.4, 1.6]);
 // fairness check (generation § 5, § 8.1).
 LightLaneTuning.ENEMY_RESERVE      = Object.freeze([-5, 50]);
 LightLaneTuning.ENEMY_BLOCKS       = Object.freeze([-2, 6]);
+// An enemy is met CORRIDOR_EXIT seconds at least after the end of what closed both neighbours of its lane (a corridor,
+// user decision: the time to see the way out and change lane, twice the reaction and the lane change).
+LightLaneTuning.CORRIDOR_EXIT      = 1.2;
 // Drawn shape of the two-wheelers (art § 5.2, user decisions: the language of a light cycle, an original design, wheels
 // far apart, front and back unlike), origin at the centre of its bottom, front towards −z, as long as its OBSTACLES
 // length. Wheels without hub: centres at `wheelZ`, `radius`, a tyre `tyre` thick (±halfThick across), `segments` around.

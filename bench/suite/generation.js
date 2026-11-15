@@ -86,6 +86,7 @@ function run() {
             // Past the meeting point only: a coin line laid before a later row's bike may end in its first metres (user
             // decision: only the corridor's and the arc's coins are kept out).
             c.check('tier ' + tier + ': no coin in a reservation past its meeting point', (stats.coinsInReserve === 0), stats.coinsInReserve + ' inside');
+            c.check('tier ' + tier + ': no enemy met less than CORRIDOR_EXIT after a corridor', (stats.corridorExits === 0), stats.corridorExits + ' too soon');
         }
         if (tier >= 6) {
             c.check('tier ' + tier + ': bridled for the Sentinel: its patterns only, no section end', ((stats.bridled > 0) && (stats.badBridled === 0) && (stats.endInBridle === 0)), stats.bridled + ' rows, ' + stats.badBridled + ' wrong, ' + stats.endInBridle + ' ends inside');
@@ -116,7 +117,7 @@ function run() {
 // The rows of a locked tier: every element and section checked, the draws recorded.
 function lockedRun(Generator, Entity, Tuning, Patterns, tier) {
     const stats = {rows: 0, empty: 0, offGrid: 0, badHoles: 0, offTrack: 0, inWarning: 0, badSections: 0, sections: 0, fives: 0, twoFives: 0,
-        repeats: 0, badCoins: 0, outOfTier: 0, observed: new Map(), expected: new Map(), enemies: 0, inReserve: 0, coinsInReserve: 0, bridled: 0, badBridled: 0, endInBridle: 0};
+        repeats: 0, badCoins: 0, outOfTier: 0, observed: new Map(), expected: new Map(), enemies: 0, inReserve: 0, coinsInReserve: 0, corridorExits: 0, bridled: 0, badBridled: 0, endInBridle: 0};
     for (const seed of SEEDS) {
         const generator = new Generator().lockTier(tier).reset(seed, 0, null);
         const ids       = [];
@@ -260,6 +261,9 @@ function checkEntity(generator, entity, Entity, Tuning, stats) {
         }
     }
     stats.enemies += ((entity.isEnemy()) ? 1 : 0);
+    if (entity.isEnemy()) {
+        stats.corridorExits += ((corridorExit(generator, entity, Tuning) < (Tuning.CORRIDOR_EXIT - 1e-6)) ? 1 : 0);
+    }
     if (entity.getKind() === Entity.GAP) {
         const into = (((z % Tuning.TILE_LENGTH) + Tuning.TILE_LENGTH) % Tuning.TILE_LENGTH);
         stats.badHoles += ((Math.abs(into - Tuning.OBSTACLES[entity.getCode()].holeFrom) > 1e-6) ? 1 : 0);
@@ -267,6 +271,21 @@ function checkEntity(generator, entity, Entity, Tuning, stats) {
     const end = entity.getEnd();
     stats.offTrack  += ((generator.laneExistsAt(lane, z) && generator.laneExistsAt(lane, (end - 1e-6))) ? 0 : 1);
     stats.inWarning += ((inWarning(generator, lane, z, end)) ? 1 : 0);
+}
+
+// The time from a corridor's end to an enemy's blocked cells, s (Infinity without a corridor): when every existing
+// neighbour of its meeting lane holds an element that started before them, the way out opens at the first of their ends.
+function corridorExit(generator, entity, Tuning) {
+    const from  = (entity.getZ() + Tuning.ENEMY_BLOCKS[0]);
+    const sides = [(entity.getToLane() - 1), (entity.getToLane() + 1)].filter((lane) => generator.laneExistsAt(lane, from));
+    const ends  = sides.map((lane) => Math.max(-Infinity, ...generator.getActive()
+        .filter((other) => (other.isObstacle() && !other.isEnemy() && (other.getLane() === lane) && (other.getZ() < from)))
+        .map((other) => other.getEnd())));
+    if ((ends.length === 0) || ends.some((end) => (end === -Infinity))) {
+        return Infinity;
+    }
+
+    return ((from - Math.min(...ends)) / generator._speedAt(entity.getZ()));
 }
 
 // On an outer lane in a warning zone or a first section of 5, or on lanes −1 / +1 in a zone's last part.

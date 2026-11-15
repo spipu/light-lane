@@ -789,7 +789,37 @@ class LightLaneTrackGenerator {
             }
         }
 
-        return true;
+        return this._clearOfCorridor(to, front);
+    }
+
+    /**
+     * An enemy is never met just out of a corridor (§ 5, user decision): it is refused when every existing neighbour of
+     * its meeting lane holds an element laid before that started before its blocked cells (ENEMY_BLOCKS) and ended less
+     * than CORRIDOR_EXIT × the speed before them; the runner gets that time to see the way out and change lane.
+     */
+    _clearOfCorridor(lane, front) {
+        const from  = (front + LightLaneTuning.ENEMY_BLOCKS[0]);
+        const since = (from - (LightLaneTuning.CORRIDOR_EXIT * this._speedAt(front)));
+        let closed  = 0;
+        for (const side of LightLaneTrackGenerator.SIDES) {
+            const next = (lane + side);
+            if (!this.laneExistsAt(next, from)) {
+                continue;
+            }
+            let shut = false;
+            for (const entity of this._active) {
+                if (entity.isObstacle() && !entity.isEnemy() && (entity.getLane() === next) && (entity.getZ() < from) && (entity.getEnd() > since)) {
+                    shut = true;
+                    break;
+                }
+            }
+            if (!shut) {
+                return true;
+            }
+            closed++;
+        }
+
+        return (closed === 0);
     }
 
     // An enemy laid earlier reserves the lane over [from, to] (no coin nor bonus there).
@@ -1189,6 +1219,8 @@ LightLaneTrackGenerator.OFFSETS_3      = Object.freeze([0]);
 LightLaneTrackGenerator.OFFSETS_5      = Object.freeze([-1, 0, 1]);
 // A placement as drawn and mirrored.
 LightLaneTrackGenerator.MIRRORS        = Object.freeze([false, true]);
+// A lane's two neighbours, by their offset.
+LightLaneTrackGenerator.SIDES          = Object.freeze([-1, 1]);
 // Room for every placement: patterns × offsets × mirrors.
 LightLaneTrackGenerator.PLACEMENTS_MAX = 400;
 // Sections planned this far past a row (its longest element and its coins).
