@@ -621,44 +621,45 @@ class LightLaneModels {
     }
 
     // An enemy (art § 5.2, user decision: the language of a light cycle, an original design), origin at the centre of its
-    // bottom, its front towards −z: a two-wheeler of a real motorbike's size, its wheels without hub (a tyre whose
-    // sides glow DANGER), a rounded black shell from nose to tail over them, a DANGER line all along its top and along
-    // each flank, a WARN head light. A stalker (side −1 / +1, the way it will go) has 3 chevrons on its tail pointing
-    // there; with `warning`, they and the flank line on that side turn WARN.
+    // bottom, its front towards −z: a two-wheeler of a real motorbike's size, its wheels without hub (a tyre whose sides
+    // glow DANGER), each held in a cowl of one rounded shell that drops low between them, under a closed canopy of dark
+    // glass; DANGER bands along its top and flanks, a WARN head light. A stalker (side −1 / +1, the way it will go) has 3
+    // chevrons on its back pointing there; with `warning`, they and the flank band on that side turn WARN.
     static _enemy(side, warning) {
-        const color = LightLaneTuning.COLOR;
-        const shape = LightLaneTuning.ENEMY_SHAPE;
-        const line  = LightLaneTuning.LINE_SIZE;
-        const b     = new LightLaneObjectBuilder();
+        const color    = LightLaneTuning.COLOR;
+        const shape    = LightLaneTuning.ENEMY_SHAPE;
+        const roles    = LightLaneModels.SECTION_ROLES;
+        const b        = new LightLaneObjectBuilder();
         for (const z of shape.wheelZ) {
             LightLaneModels._wheel(b, z);
         }
-        const rings = shape.stations.map((station) => LightLaneModels._section(station));
+        const stations = LightLaneModels._enemyStations();
+        const rings    = stations.map((station) => LightLaneModels._section(station));
+        const centre   = (station) => ((station[1] + station[2]) / 2);
         for (let i = 1; i < rings.length; i++) {
-            const [za, ya] = shape.stations[i - 1];
-            const [zb, yb] = shape.stations[i];
-            const inside   = [0, ((ya + yb) / 2), ((za + zb) / 2)];
-            for (let k = 0; k < shape.section; k++) {
-                const n    = ((k + 1) % shape.section);
+            const z      = ((stations[i - 1][0] + stations[i][0]) / 2);
+            const inside = [0, ((centre(stations[i - 1]) + centre(stations[i])) / 2), z];
+            const glass  = ((z > shape.glass[0]) && (z < shape.glass[1]));
+            for (let k = 0; k < roles.length; k++) {
+                const n    = ((k + 1) % roles.length);
                 const quad = [rings[i - 1][k], rings[i - 1][n], rings[i][n], rings[i][k]];
-                b.facing(quad, inside, LightLaneModels._shellColor(k, shape.section));
+                const role = roles[k];
+                if (typeof role === 'number') {
+                    // A glowing band: the top's (0), each flank's by its side (WARN on a warning stalker's side).
+                    b.facing(quad, inside, (((side !== 0) && (role === side) && warning) ? color.WARN : color.DANGER), true);
+                    continue;
+                }
+                b.facing(quad, inside, LightLaneModels._shellColor(role, glass));
             }
         }
-        // The nose cap, seen as it comes.
-        const [noseZ, noseY] = shape.stations[0];
-        b.facing(rings[0], [0, noseY, (noseZ + 1)], color.ENEMY_SIDE);
-        // Its lines: the top's from nose to tail, each flank's (WARN on a warning stalker's side).
-        const top   = (shape.section / 4);
-        const flank = [[1, 0], [-1, (shape.section / 2)]];
-        for (let i = 1; i < rings.length; i++) {
-            b.bar(rings[i - 1][top], rings[i][top], line, color.DANGER, [0, 1, 0]);
-            for (const [sx, k] of flank) {
-                const rgb = (((side !== 0) && (sx === side) && warning) ? color.WARN : color.DANGER);
-                b.bar(rings[i - 1][k], rings[i][k], line, rgb, [sx, 0, 0]);
-            }
-        }
+        // The nose and tail caps.
+        const nose = stations[0];
+        const tail = stations[stations.length - 1];
+        b.facing(rings[0], [0, centre(nose), (nose[0] + 1)], color.ENEMY_SIDE);
+        b.facing(rings[rings.length - 1], [0, centre(tail), (tail[0] - 1)], color.ENEMY_SIDE);
         const [lightWidth, lightHeight] = shape.light;
-        b.rect((-lightWidth / 2), (noseY - (lightHeight / 2)), (lightWidth / 2), (noseY + (lightHeight / 2)), (noseZ - LightLaneTuning.LINE_OUTSET), color.WARN, true);
+        const noseY = centre(nose);
+        b.rect((-lightWidth / 2), (noseY - (lightHeight / 2)), (lightWidth / 2), (noseY + (lightHeight / 2)), (nose[0] - LightLaneTuning.LINE_OUTSET), color.WARN, true);
         if (side !== 0) {
             LightLaneModels._chevrons(b, side, warning);
         }
@@ -666,30 +667,127 @@ class LightLaneModels {
         return b.data();
     }
 
-    // A rounded section of the shell at a station [z, centre y, half width, half height]: SECTION points, the first on the
-    // right flank, a quarter round on the top.
-    static _section([z, y, halfWidth, halfHeight]) {
-        const n      = LightLaneTuning.ENEMY_SHAPE.section;
-        const points = [];
-        for (let k = 0; k < n; k++) {
-            const angle = ((2 * Math.PI * k) / n);
-            const c     = Math.cos(angle);
-            const s     = Math.sin(angle);
-            // A squarer round than an ellipse: |cos|^ROUND, |sin|^ROUND.
-            points.push([(Math.sign(c) * halfWidth * Math.pow(Math.abs(c), LightLaneModels.ROUND)), (y + (Math.sign(s) * halfHeight * Math.pow(Math.abs(s), LightLaneModels.ROUND))), z]);
+    // The shell's stations [z, bottom y, top y, half width, flank band y]: its nose and tail (the bike's length), along
+    // each wheel's upper half (equal angles, so the shell's flat faces stay within cowlGap of the round tyre), and
+    // between the wheels.
+    static _enemyStations() {
+        const shape = LightLaneTuning.ENEMY_SHAPE;
+        const half  = (LightLaneTuning.OBSTACLES.R.length / 2);
+        const reach = (shape.radius + shape.cowlGap);
+        const steps = (shape.arcStations - 1);
+        const zs    = [-half];
+        const arc   = (wheelZ) => {
+            for (let i = 0; i <= steps; i++) {
+                const z = (wheelZ + (reach * Math.cos(Math.PI * (1 - (i / steps)))));
+                if (Math.abs(z - zs[zs.length - 1]) > LightLaneModels.EPSILON) {
+                    zs.push(z);
+                }
+            }
+        };
+        arc(shape.wheelZ[0]);
+        zs.push(...shape.middle);
+        arc(shape.wheelZ[1]);
+        if (zs[zs.length - 1] < (half - LightLaneModels.EPSILON)) {
+            zs.push(half);
         }
 
-        return points;
+        return zs.map((z) => {
+            const bottom = LightLaneModels._enemyBottom(z);
+            const top    = LightLaneModels._enemyTop(z);
+            return [z, bottom, top, LightLaneModels._curve(shape.width, z), LightLaneModels._curve(shape.flank, z)];
+        });
     }
 
-    // The shell's colour between points k and k + 1 of a section: its top lighter, its flanks darker, its bottom darkest.
-    static _shellColor(k, n) {
-        const middle = Math.sin((2 * Math.PI * (k + 0.5)) / n);
-        if (middle > LightLaneModels.FACING_UP) {
-            return LightLaneTuning.COLOR.ENEMY_TOP;
+    // The shell's underside at z: its belly, kept cowlGap off the tyres.
+    static _enemyBottom(z) {
+        const shape = LightLaneTuning.ENEMY_SHAPE;
+
+        return Math.max(LightLaneModels._overWheels(z, (shape.radius + shape.cowlGap)), LightLaneModels._curve(shape.belly, z));
+    }
+
+    // The shell's top at z: its top line, with cowlThick of shell at least over the wheels.
+    static _enemyTop(z) {
+        const shape = LightLaneTuning.ENEMY_SHAPE;
+
+        return Math.max(LightLaneModels._overWheels(z, (shape.radius + shape.cowlGap + shape.cowlThick)), LightLaneModels._curve(shape.top, z));
+    }
+
+    // A smooth curve through [z, value] points (cubic Hermite, tangents from the neighbours), flat beyond its ends.
+    static _curve(points, z) {
+        const last = (points.length - 1);
+        if (z <= points[0][0]) {
+            return points[0][1];
+        }
+        if (z >= points[last][0]) {
+            return points[last][1];
+        }
+        let i = 0;
+        while (z > points[i + 1][0]) {
+            i++;
+        }
+        const slope = (k) => {
+            const [za, ya] = points[Math.max(0, (k - 1))];
+            const [zb, yb] = points[Math.min(last, (k + 1))];
+            return ((yb - ya) / (zb - za));
+        };
+        const [z0, y0] = points[i];
+        const [z1, y1] = points[i + 1];
+        const span     = (z1 - z0);
+        const t        = ((z - z0) / span);
+        const t2       = (t * t);
+        const t3       = (t2 * t);
+
+        return ((((2 * t3) - (3 * t2) + 1) * y0) + ((t3 - (2 * t2) + t) * span * slope(i)) + (((3 * t2) - (2 * t3)) * y1) + ((t3 - t2) * span * slope(i + 1)));
+    }
+
+    // The highest point at z of the circles of the given radius around the wheels' axles; −Infinity off both.
+    static _overWheels(z, radius) {
+        const shape = LightLaneTuning.ENEMY_SHAPE;
+        let   y     = -Infinity;
+        for (const wheelZ of shape.wheelZ) {
+            const dz = (z - wheelZ);
+            if (Math.abs(dz) <= (radius + LightLaneModels.EPSILON)) {
+                y = Math.max(y, (shape.radius + Math.sqrt(Math.max(0, ((radius * radius) - (dz * dz))))));
+            }
         }
 
-        return ((middle < -LightLaneModels.FACING_UP) ? LightLaneTuning.COLOR.ENEMY_BOTTOM : LightLaneTuning.COLOR.ENEMY_SIDE);
+        return y;
+    }
+
+    // A rounded section of the shell at a station [z, bottom, top, half width, flank band y], in SECTION_ROLES order from
+    // the right flank up and round: a squarer round than an ellipse (|cos|^ROUND, |sin|^ROUND), flat bands on the flanks
+    // and top; the flank band kept within FLANK_HIGH × the half height of mid height (between the rounded corners, so the
+    // section stays convex), its half width FLANK_BAND × the half height at most.
+    static _section([z, bottom, top, halfWidth, flankY]) {
+        const centre = ((top + bottom) / 2);
+        const half   = ((top - bottom) / 2);
+        const band   = (LightLaneTuning.ENEMY_SHAPE.band / 2);
+        const flank  = Math.min(band, (half * LightLaneModels.FLANK_BAND));
+        const reach  = (half * LightLaneModels.FLANK_HIGH);
+        const level  = Math.min(Math.max(flankY, (centre - reach)), (centre + reach));
+        const round  = (degrees) => {
+            const angle = ((degrees * Math.PI) / 180);
+            const c     = Math.cos(angle);
+            const s     = Math.sin(angle);
+            return [(Math.sign(c) * halfWidth * Math.pow(Math.abs(c), LightLaneModels.ROUND)), (centre + (Math.sign(s) * half * Math.pow(Math.abs(s), LightLaneModels.ROUND))), z];
+        };
+        const [upRight, upLeft, downLeft, downRight] = LightLaneModels.SECTION_ROUNDS;
+
+        return [
+            [halfWidth, (level - flank), z], [halfWidth, (level + flank), z], round(upRight), [band, top, z], [-band, top, z],
+            round(upLeft), [-halfWidth, (level + flank), z], [-halfWidth, (level - flank), z], round(downLeft), [0, bottom, z],
+            round(downRight)
+        ];
+    }
+
+    // A shell face's colour by its role: its top lighter (dark glass on the canopy), its flanks darker, its bottom darkest.
+    static _shellColor(role, glass) {
+        const color = LightLaneTuning.COLOR;
+        if (role === LightLaneModels.SHELL_TOP) {
+            return ((glass) ? color.BODY_TOP : color.ENEMY_TOP);
+        }
+
+        return ((role === LightLaneModels.SHELL_BOTTOM) ? color.ENEMY_BOTTOM : color.ENEMY_SIDE);
     }
 
     // A wheel without hub at z: its tyre (outer and inner faces dark, both sides glowing DANGER), on the ground.
@@ -714,17 +812,16 @@ class LightLaneModels {
         }
     }
 
-    // A stalker's 3 chevrons on its tail, pointing the way it will go (WARN while it announces it).
+    // A stalker's 3 chevrons on its back, over the rear cowl, pointing the way it will go (WARN while it announces it).
     static _chevrons(b, side, warning) {
         const shape  = LightLaneTuning.ENEMY_SHAPE;
         const line   = LightLaneTuning.LINE_SIZE;
         const [across, along] = shape.chevron;
-        const tail   = shape.stations[shape.stations.length - 2];
-        const roof   = (tail[1] + tail[3] + LightLaneTuning.LINE_OUTSET + (line / 2));
         const rgb    = ((warning) ? LightLaneTuning.COLOR.WARN : LightLaneTuning.COLOR.DANGER);
         for (let k = 0; k < shape.chevrons; k++) {
-            const z   = (tail[0] - (k * along * 2));
-            const tip = [(side * across / 2), roof, z];
+            const z    = (shape.chevronFrom - (k * along * 2));
+            const roof = (Math.max(LightLaneModels._enemyTop(z - (along / 2)), LightLaneModels._enemyTop(z + (along / 2))) + LightLaneTuning.LINE_OUTSET + (line / 2));
+            const tip  = [(side * across / 2), roof, z];
             b.bar([(-side * across / 2), roof, (z - (along / 2))], tip, line, rgb, [0, 1, 0]);
             b.bar([(-side * across / 2), roof, (z + (along / 2))], tip, line, rgb, [0, 1, 0]);
         }
@@ -943,10 +1040,21 @@ LightLaneModels.STRIKE_BEAM = 'strikeBeam';
 LightLaneModels.SWEEP_WARN = 'sweepWarn';
 LightLaneModels.SWEEP      = 'sweep';
 LightLaneModels.SWEEP_LANES = Object.freeze(['3', '5']);
-// The enemies' shell: the roundness of its sections (1 an ellipse, lower squarer) and the sine above which a face
-// counts as a top (or below its negative, a bottom).
-LightLaneModels.ROUND      = 0.6;
-LightLaneModels.FACING_UP  = 0.5;
+// The enemies' shell: the roundness of its sections (1 an ellipse, lower squarer); a section's faces in order from its
+// right flank up and round (a number: a glowing band, by its side, 0 the top), and the angles of its rounded corners.
+LightLaneModels.ROUND        = 0.6;
+LightLaneModels.SHELL_TOP    = 'top';
+LightLaneModels.SHELL_SIDE   = 'side';
+LightLaneModels.SHELL_BOTTOM = 'bottom';
+LightLaneModels.SECTION_ROLES = Object.freeze([
+    1, LightLaneModels.SHELL_SIDE, LightLaneModels.SHELL_TOP, 0, LightLaneModels.SHELL_TOP, LightLaneModels.SHELL_SIDE,
+    -1, LightLaneModels.SHELL_SIDE, LightLaneModels.SHELL_BOTTOM, LightLaneModels.SHELL_BOTTOM, LightLaneModels.SHELL_SIDE
+]);
+LightLaneModels.SECTION_ROUNDS = Object.freeze([45, 135, 225, 315]);
+// The flank band: within FLANK_HIGH × the half height of mid height (between the round corners, so the section stays
+// convex), its half width FLANK_BAND × the half height at most.
+LightLaneModels.FLANK_HIGH   = 0.5;
+LightLaneModels.FLANK_BAND   = 0.3;
 // Lengths closer than this are equal (m): a hole's side wall shorter is not built, a floor mark is found at its z.
 LightLaneModels.EPSILON    = 0.01;
 LightLaneModels.TILE_EDGE  = 'tileEdge';

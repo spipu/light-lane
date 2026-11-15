@@ -225,9 +225,9 @@ LightLaneTuning.OBSTACLES = Object.freeze({
     X5:  {kind: 'gap', halfWidth: 0.70, y0: 0, y1: 0.05, z0: 0.30, z1: -0.30, length: 4.5, holeFrom: 3.0},
     // Enemies (gameplay § 6): two-wheelers of a real motorbike's size (user decision), their box from their moving front;
     // laid by their meeting point (generation § 5).
-    'R':  {kind: 'prowler', halfWidth: 0.40, y0: 0.05, y1: 1.30, z0: 0.10, z1: 3.10, length: 3.2},
-    'T<': {kind: 'stalker', halfWidth: 0.40, y0: 0.05, y1: 1.30, z0: 0.10, z1: 3.10, length: 3.2, side: -1},
-    'T>': {kind: 'stalker', halfWidth: 0.40, y0: 0.05, y1: 1.30, z0: 0.10, z1: 3.10, length: 3.2, side: 1},
+    'R':  {kind: 'prowler', halfWidth: 0.40, y0: 0.05, y1: 1.30, z0: 0.10, z1: 3.90, length: 4.0},
+    'T<': {kind: 'stalker', halfWidth: 0.40, y0: 0.05, y1: 1.30, z0: 0.10, z1: 3.90, length: 4.0, side: -1},
+    'T>': {kind: 'stalker', halfWidth: 0.40, y0: 0.05, y1: 1.30, z0: 0.10, z1: 3.90, length: 4.0, side: 1},
 });
 // --- Enemies (gameplay § 6, generation § 5) ---
 // A bike runs to the runner at ENEMY_SPEED on the ground whatever the tier (user decision): its share of the runner's
@@ -269,29 +269,35 @@ LightLaneTuning.STALKER_ARROW_SIZE  = Object.freeze([2.4, 1.6]);
 // fairness check (generation § 5, § 8.1).
 LightLaneTuning.ENEMY_RESERVE      = Object.freeze([-5, 50]);
 LightLaneTuning.ENEMY_BLOCKS       = Object.freeze([-2, 6]);
-// Drawn shape of the two-wheelers (art § 5.2, user decision: the language of a light cycle, an original design), origin
-// at the centre of its bottom, front towards −z. Wheels without hub: centres at `wheelZ`, `radius`, a tyre `tyre` thick
-// (±halfThick across), `segments` around. The shell: stations along z [z, centre y, half width, half height], each a
-// rounded section of `section` points; a head light `light` [width, height] at its nose; 3 chevrons `chevron`
-// [width, depth] on a stalker's tail.
+// Drawn shape of the two-wheelers (art § 5.2, user decisions: the language of a light cycle, an original design, wheels
+// far apart, front and back unlike), origin at the centre of its bottom, front towards −z, as long as its OBSTACLES
+// length. Wheels without hub: centres at `wheelZ`, `radius`, a tyre `tyre` thick (±halfThick across), `segments` around.
+// The shell, one rounded body from nose to tail, its profile drawn by smooth curves through [z, value] points: its
+// `top`, its `belly` (underside), its half `width`, the height of its flank bands `flank`; over each wheel it keeps at
+// least `cowlGap` off the tyre underneath and `cowlThick` of shell above that, built at `arcStations` stations along the
+// wheel's upper half, plus the `middle` stations between the wheels; dark glass on top between `glass` [from, to];
+// glowing bands `band` wide along its top and flanks. A head light `light` [width, height] at its nose; 3 chevrons
+// `chevron` [width, depth] on a stalker's back, the first at `chevronFrom`.
 LightLaneTuning.ENEMY_SHAPE = Object.freeze({
-    wheelZ:    Object.freeze([-1.0, 1.0]),
-    radius:    0.60,
-    tyre:      0.12,
-    halfThick: 0.17,
-    segments:  12,
-    stations:  Object.freeze([
-        Object.freeze([-1.60, 0.75, 0.10, 0.10]),
-        Object.freeze([-1.20, 0.85, 0.38, 0.30]),
-        Object.freeze([-0.50, 0.95, 0.30, 0.35]),
-        Object.freeze([0.30, 1.05, 0.28, 0.35]),
-        Object.freeze([1.00, 0.90, 0.40, 0.35]),
-        Object.freeze([1.60, 0.80, 0.15, 0.15]),
-    ]),
-    section:   8,
-    light:     Object.freeze([0.16, 0.08]),
-    chevron:   Object.freeze([0.36, 0.16]),
-    chevrons:  3,
+    wheelZ:      Object.freeze([-1.28, 1.37]),
+    radius:      0.60,
+    tyre:        0.12,
+    halfThick:   0.17,
+    segments:    12,
+    cowlGap:     0.03,
+    cowlThick:   0.12,
+    arcStations: 9,
+    middle:      Object.freeze([-0.45, 0, 0.4]),
+    top:         Object.freeze([[-2.0, 1.02], [-1.65, 1.30], [-1.28, 1.40], [-0.85, 1.47], [-0.45, 1.58], [0.1, 1.50], [0.6, 1.42], [2.0, 1.38]]),
+    belly:       Object.freeze([[-2.0, 0.40], [-0.6, 0.34], [0.2, 0.42], [0.8, 0.62], [2.0, 0.62]]),
+    width:       Object.freeze([[-2.0, 0.22], [-1.3, 0.28], [-0.45, 0.40], [0.3, 0.36], [1.4, 0.30], [2.0, 0.28]]),
+    flank:       Object.freeze([[-2.0, 0.80], [-1.28, 1.31], [-0.35, 1.02], [0.8, 1.12], [1.37, 1.31], [2.0, 1.18]]),
+    glass:       Object.freeze([-1.05, 0.2]),
+    band:        0.07,
+    light:       Object.freeze([0.16, 0.08]),
+    chevron:     Object.freeze([0.36, 0.16]),
+    chevrons:    3,
+    chevronFrom: 1.75,
 });
 
 // --- The Sentinel (gameplay § 7, generation § 7.2) ---
