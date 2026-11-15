@@ -14,6 +14,7 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
         this._addListItem(listEl, appTranslator.get('menu.bestScores'), () => {
             this._navigator.openBestScores();
         });
+        this._addGalleryItem(listEl);
         this._addListItem(listEl, appTranslator.get('menu.options'), () => {
             this._openModal(new LightLaneOptionsModal(this._display)).show();
         });
@@ -22,6 +23,15 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
         }}]);
 
         this._nav.selectFirst();
+    }
+
+    // Greyed and out of the navigation until an item is unlocked (gameplay § 14).
+    _addGalleryItem(listEl) {
+        if (lightLaneGallery.hasAny()) {
+            this._addListItem(listEl, appTranslator.get('menu.gallery'), () => this._navigator.openGallery());
+            return;
+        }
+        AppMenuDom.addListItem(listEl, appTranslator.get('menu.gallery')).classList.add(MainMenuScreen.LOCKED_CLASS);
     }
 
     _addLogo(titleEl) {
@@ -33,3 +43,5 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
 
 // The brand (LightLaneMenuNavigator.BRAND) cut where the logo changes colour; not translated.
 MainMenuScreen.LOGO_WORDS = Object.freeze(['Light ', 'Lane']);
+// An entry not available yet.
+MainMenuScreen.LOCKED_CLASS = 'light-lane-menu-locked';

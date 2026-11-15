@@ -9,6 +9,7 @@ class LightLaneMenuNavigator {
         this._database         = new AppDatabase(LightLaneDatabaseSchema.build());
         this._mainMenuScreen   = new MainMenuScreen(this, this._display);
         this._bestScoresScreen = new BestScoresScreen(this, this._display);
+        this._galleryScreen    = new GalleryScreen(this, this._display);
         this._currentScreen    = null;
         // Read once: the test mode of the local host (gameplay § 13), inactive anywhere else.
         this._testMode         = LightLaneTestMode.fromLocation();
@@ -21,9 +22,11 @@ class LightLaneMenuNavigator {
         this._database.open()
             .then(() => lightLaneSettings.init(this._database))
             .then(() => lightLaneScores.init(this._database))
+            .then(() => lightLaneGallery.init(this._database).load())
             .then(() => true, (error) => {
                 console.warn('LightLaneMenuNavigator - storage unavailable: ' + error.message);
                 lightLaneScores.init(null);
+                lightLaneGallery.init(null);
                 return false;
             })
             .then((storageReady) => {
@@ -83,6 +86,10 @@ class LightLaneMenuNavigator {
     openBestScores(highlighted = null) {
         this._bestScoresScreen.setHighlighted(highlighted);
         this._switchTo(this._bestScoresScreen);
+    }
+
+    openGallery() {
+        this._switchTo(this._galleryScreen);
     }
 
     _switchTo(screen) {

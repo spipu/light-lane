@@ -34,6 +34,7 @@ class LightLaneGame {
         this._overDisplay     = null;
         this._overModal       = null;
         this._overPending     = false;   // the run is over, its score being saved
+        this._passed          = 0;       // the gallery's items passed this run, as last handed to the gallery
         this._animateCallback = (timestamp) => this._guard(this._animate, timestamp);
         this._onVisibility    = () => this._guard(this._visibilityChanged);
     }
@@ -94,6 +95,7 @@ class LightLaneGame {
             speed:  test.getSpeed()
         });
         this._overPending = false;
+        this._passed      = 0;
         this._presentation.newRun();
         this._sampler.restart();
         if (this._robot !== null) {
@@ -299,12 +301,23 @@ class LightLaneGame {
         }
         const resuming = ((simulation.getState() === LightLaneSimulation.COUNTDOWN) && !simulation.isNewRun());
         simulation.advance(dt, this._orders);
+        this._unlockGallery();
         this._presentation.present(dt, resuming, (this._overModal !== null));
         if ((simulation.getState() === LightLaneSimulation.GAME_OVER) && !this._overPending && (this._overModal === null)) {
             this._gameOver();
         }
 
         requestAnimationFrame(this._animateCallback);
+    }
+
+    // The gallery's items passed for the first time are kept at once (gameplay § 14): a run quit or crashed keeps them.
+    _unlockGallery() {
+        const passed = this._simulation.getPassed();
+        if (passed === this._passed) {
+            return;
+        }
+        this._passed = passed;
+        lightLaneGallery.unlock(passed).catch((error) => console.warn('LightLaneGame - gallery not saved: ' + error.message));
     }
 
     _guard(method, argument) {

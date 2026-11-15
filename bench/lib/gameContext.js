@@ -1,5 +1,5 @@
 /**
- * The simulation's classes loaded in a vm context, in the browser's order (read from js/libBootstrap.json), without
+ * The simulation's classes (and the gallery's, without its database) loaded in a vm context, in the browser's order (read from js/libBootstrap.json), without
  * the engine, the DOM or the loader: what the suites drive. AppInputSwipe is reduced to its direction constants (read at load by
  * LightLaneCommandSampler).
  */
@@ -10,6 +10,8 @@ const vm   = require('vm');
 
 const WEBSITE_DIR = path.resolve(__dirname, '..', '..', 'website');
 const SOURCES     = [
+    'js/lightLane/lightLaneDatabaseSchema.js',
+    'js/lightLane/lightLaneGallery.js',
     'js/lightLane/lightLaneTuning.js',
     'js/lightLane/game/lightLaneCommandSampler.js',
     'js/lightLane/game/lightLaneRandom.js',

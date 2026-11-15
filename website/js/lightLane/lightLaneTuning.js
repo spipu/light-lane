@@ -512,3 +512,21 @@ LightLaneTuning.FRAGILE_BLINK_HZ = 4;
 // --- Game over (art § 10) ---
 LightLaneTuning.GAME_OVER_INPUT_LOCK = 0.4;
 
+
+// --- Gallery (gameplay § 14, art § 10) ---
+// Its items in their order: an element of each kind passed alive (a bike without its trail, then with it: user request),
+// the Sentinel's pass survived, the runner.
+LightLaneTuning.GALLERY_ITEMS           = Object.freeze(['hurdle', 'gate', 'block', 'gap', 'bike', 'bikeTrail', 'sentinel', 'runner']);
+// The runner unlocked by this many metres run in a run (user request).
+LightLaneTuning.GALLERY_RUNNER_DISTANCE = 10000;
+// The item turns on its own once in this many seconds, until the player turns it (Left / Right held: degrees a second).
+LightLaneTuning.GALLERY_TURN_PERIOD     = 8;
+LightLaneTuning.GALLERY_TURN_SPEED      = 120;
+// A finger's turn: degrees a pixel (across: about the item; up and down: the camera over or under it, up to PITCH_MAX).
+LightLaneTuning.GALLERY_TURN_SWIPE      = 0.5;
+LightLaneTuning.GALLERY_PITCH_MAX       = 85;
+// Seen from above, degrees; its bounding sphere fills the view but this margin (the camera this much farther away).
+LightLaneTuning.GALLERY_PITCH           = 15;
+LightLaneTuning.GALLERY_MARGIN          = 1.15;
+// The runner's clips in turn, each for its duration (one jump, one slide, a few strides between).
+LightLaneTuning.GALLERY_RUNNER_CLIPS    = Object.freeze([['run', 2], ['jump', LightLaneTuning.JUMP_TIME], ['run', 1.5], ['slide', LightLaneTuning.SLIDE_TIME]]);

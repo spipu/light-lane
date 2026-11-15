@@ -1,0 +1,119 @@
+/**
+ * The gallery (gameplay § 14, art § 10): on the left the list of its items, the locked ones as « ??? » (greyed, not
+ * selectable); on the right the item highlighted in 3D (LightLaneGalleryView) with its name. Up / Down walk the list,
+ * Left / Right (held), the gamepad's stick or a finger dragged across the view (any way) turn the item.
+ */
+class GalleryScreen extends AbstractLightLaneMenuScreen {
+    constructor(navigator, display) {
+        super(navigator, display);
+
+        this._view      = null;
+        this._nameEl    = null;
+        this._items     = [];      // the unlocked items, in the order of their list entries
+        this._held      = {left: false, right: false};
+        this._swipeX    = null;    // the finger's last position on the view, null while none is down
+        this._swipeY    = 0;
+        this._onKeyDown = (event) => this._key(event, true);
+        this._onKeyUp   = (event) => this._key(event, false);
+        this._onBlur    = () => this._release();
+    }
+
+    _build() {
+        const {panel, listEl} = this._buildPanel(appTranslator.get('menu.gallery'));
+        const detail = this._addDetailPanel();
+        this._container.classList.add('light-lane-gallery');
+        detail.classList.add('light-lane-gallery-detail');
+        const host   = AppMenuDom.addElement(detail, 'div', 'light-lane-gallery-view');
+        this._nameEl = AppMenuDom.addText(detail, 'light-lane-gallery-name', '');
+        this._bindSwipe(host);
+
+        this._items = LightLaneTuning.GALLERY_ITEMS.filter((item) => lightLaneGallery.isUnlocked(item));
+        for (const item of LightLaneTuning.GALLERY_ITEMS) {
+            if (lightLaneGallery.isUnlocked(item)) {
+                this._nav.addItemIn(listEl, appTranslator.get('gallery.' + item), () => {});
+                continue;
+            }
+            AppMenuDom.addListItem(listEl, appTranslator.get('gallery.locked')).classList.add(MainMenuScreen.LOCKED_CLASS);
+        }
+        this._addBackButton(panel);
+        this._nav.setOnSelect((index) => this._select(index));
+
+        this._view = new LightLaneGalleryView(host).start(this._items[0] ?? LightLaneTuning.GALLERY_ITEMS[0]);
+        this._nav.selectFirst();
+        this._select(0);
+        document.addEventListener('keydown', this._onKeyDown);
+        document.addEventListener('keyup', this._onKeyUp);
+        window.addEventListener('blur', this._onBlur);
+    }
+
+    hide() {
+        document.removeEventListener('keydown', this._onKeyDown);
+        document.removeEventListener('keyup', this._onKeyUp);
+        window.removeEventListener('blur', this._onBlur);
+        if (this._view !== null) {
+            this._view.stop();
+            this._view = null;
+        }
+
+        return super.hide();
+    }
+
+    _onBack() {
+        this._navigator.showMainMenu();
+    }
+
+    _select(index) {
+        const item = this._items[index];
+        if ((item === undefined) || (this._view === null)) {
+            return;
+        }
+        this._nameEl.textContent = appTranslator.get('gallery.' + item);
+        this._view.show(item);
+    }
+
+    // Left / Right held turn the item (the list's own navigation ignores them: its entries have no value to change).
+    _key(event, down) {
+        if ((event.key !== GalleryScreen.KEY_LEFT) && (event.key !== GalleryScreen.KEY_RIGHT)) {
+            return;
+        }
+        this._held[(event.key === GalleryScreen.KEY_LEFT) ? 'left' : 'right'] = (down && !this._navBlocked());
+        this._applyTurn();
+    }
+
+    _release() {
+        this._held.left  = false;
+        this._held.right = false;
+        this._applyTurn();
+    }
+
+    _applyTurn() {
+        if (this._view !== null) {
+            this._view.setTurn((this._held.right ? 1 : 0) - (this._held.left ? 1 : 0));
+        }
+    }
+
+    // A finger (or the mouse, button down) moved across the view turns the item, up and down too (user request).
+    _bindSwipe(host) {
+        host.addEventListener('pointerdown', (event) => {
+            this._swipeX = event.clientX;
+            this._swipeY = event.clientY;
+            host.setPointerCapture(event.pointerId);
+        });
+        host.addEventListener('pointermove', (event) => {
+            if ((this._swipeX === null) || (this._view === null)) {
+                return;
+            }
+            this._view.swipe((event.clientX - this._swipeX), (event.clientY - this._swipeY));
+            this._swipeX = event.clientX;
+            this._swipeY = event.clientY;
+        });
+        const end = () => {
+            this._swipeX = null;
+        };
+        host.addEventListener('pointerup', end);
+        host.addEventListener('pointercancel', end);
+    }
+}
+
+GalleryScreen.KEY_LEFT  = 'ArrowLeft';
+GalleryScreen.KEY_RIGHT = 'ArrowRight';

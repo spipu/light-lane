@@ -672,3 +672,42 @@
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
+
+/* An entry not available yet: the gallery before its first item, a locked item of the gallery (gameplay § 14). */
+.app-menu-item.light-lane-menu-locked,
+.app-menu-list-simple .app-menu-item.light-lane-menu-locked {
+    color: rgba(201, 214, 226, 0.3);
+    cursor: default;
+}
+
+/* The gallery: a third for the list, two thirds for the item turning in its view, its name under it (user request). */
+.light-lane-gallery .app-menu-panel {
+    width: 30%;
+}
+
+.light-lane-gallery .app-menu-detail.light-lane-gallery-detail {
+    left: 36%;
+    right: 3%;
+    bottom: 4.5em;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6em;
+}
+
+.light-lane-gallery-view {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    border: max(0.08em, 2px) solid rgba(120, 214, 232, 0.35);
+    touch-action: none;
+    cursor: grab;
+}
+
+.light-lane-gallery-name {
+    font-family: "Oswald", "Arial Narrow", sans-serif;
+    font-size: 1.3em;
+    letter-spacing: 0.14em;
+    text-align: center;
+    text-transform: uppercase;
+    color: #78D6E8;
+}

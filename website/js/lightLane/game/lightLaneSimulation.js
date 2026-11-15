@@ -39,6 +39,8 @@ class LightLaneSimulation {
         this._shield        = false;
         this._fixedSpeed    = null;
         this._shieldDeaths  = 0;
+        this._passed        = 0;      // the gallery's items passed this run (gameplay § 14), a bit each (GALLERY_ITEMS)
+        this._sentinelSeen  = false;  // the Sentinel's pass under way was seen
         this._pending       = [];     // orders received, handed to the next running step
         // Boxes reused every step.
         this._sweep         = {x0: 0, x1: 0, y0: 0, y1: 0, z0: 0, z1: 0};
@@ -70,6 +72,8 @@ class LightLaneSimulation {
         this._shield        = (options.shield === true);
         this._fixedSpeed    = (options.speed ?? ((options.locked === true) ? LightLaneDifficulty.tierSpeed(tier) : null));
         this._shieldDeaths  = 0;
+        this._passed        = 0;
+        this._sentinelSeen  = false;
         this._score.reset();
         this._events.clear();
         const seed          = (options.seed ?? LightLaneRandom.freshSeed());
@@ -239,6 +243,8 @@ class LightLaneSimulation {
         this._shield       = other._shield;
         this._fixedSpeed   = other._fixedSpeed;
         this._shieldDeaths = other._shieldDeaths;
+        this._passed       = other._passed;
+        this._sentinelSeen = other._sentinelSeen;
         this._pending.length = 0;
         for (const order of other._pending) {
             this._pending.push(order);
@@ -250,6 +256,13 @@ class LightLaneSimulation {
         this._events.clear();
 
         return this;
+    }
+
+    /**
+     * @returns {int} the gallery's items passed this run (gameplay § 14), a bit each in the order of GALLERY_ITEMS
+     */
+    getPassed() {
+        return this._passed;
     }
 
     /**
@@ -315,6 +328,41 @@ class LightLaneSimulation {
             return;
         }
         this._checkCoins();
+        this._checkPassed();
+    }
+
+    // The gallery's items passed alive (gameplay § 14): an element's back behind the runner (an element already hit, under
+    // the test mode's shield, does not count), the end of a Sentinel's pass, GALLERY_RUNNER_DISTANCE run.
+    _checkPassed() {
+        const items = LightLaneTuning.GALLERY_ITEMS;
+        if (this._distance >= LightLaneTuning.GALLERY_RUNNER_DISTANCE) {
+            this._passed |= LightLaneSimulation.galleryBit(LightLaneSimulation.GALLERY_RUNNER);
+        }
+        const active = this._sentinel.isActive();
+        if (this._sentinelSeen && !active) {
+            this._passed |= LightLaneSimulation.galleryBit(LightLaneSimulation.GALLERY_SENTINEL);
+        }
+        this._sentinelSeen = active;
+        if (this._passed === ((1 << items.length) - 1)) {
+            return;
+        }
+        const behind = (this._z - LightLaneTuning.RUNNER_HALF_DEPTH);
+        for (const entity of this._generator.getActive()) {
+            const kind = LightLaneSimulation.GALLERY_KINDS[entity.getKind()];
+            const item = (((kind === LightLaneSimulation.GALLERY_BIKE) && entity.hasTrail()) ? LightLaneSimulation.GALLERY_BIKE_TRAIL : kind);
+            if ((item === undefined) || entity.isHit() || (entity.getBox().z1 >= behind)) {
+                continue;
+            }
+            this._passed |= LightLaneSimulation.galleryBit(item);
+        }
+    }
+
+    /**
+     * @param {string} item - one of LightLaneTuning.GALLERY_ITEMS
+     * @returns {int} its bit in the mask of the items passed
+     */
+    static galleryBit(item) {
+        return (1 << LightLaneTuning.GALLERY_ITEMS.indexOf(item));
     }
 
     // The enemies follow the runner's advance (generation § 5); a stalker that starts announcing its move says so
@@ -587,3 +635,17 @@ LightLaneSimulation.RUNNING   = 'running';
 LightLaneSimulation.DYING     = 'dying';
 LightLaneSimulation.GAME_OVER = 'gameOver';
 LightLaneSimulation.GO        = 'go';
+// The gallery's item of each kind of element (gameplay § 14), and of the Sentinel and the runner.
+LightLaneSimulation.GALLERY_KINDS    = Object.freeze({
+    [LightLaneEntity.HURDLE]:  'hurdle',
+    [LightLaneEntity.GATE]:    'gate',
+    [LightLaneEntity.BLOCK]:   'block',
+    [LightLaneEntity.GAP]:     'gap',
+    [LightLaneEntity.PROWLER]: 'bike',
+    [LightLaneEntity.STALKER]: 'bike'
+});
+// A bike with its trail (TRAIL_TIER on) is an item of its own.
+LightLaneSimulation.GALLERY_BIKE       = 'bike';
+LightLaneSimulation.GALLERY_BIKE_TRAIL = 'bikeTrail';
+LightLaneSimulation.GALLERY_SENTINEL = 'sentinel';
+LightLaneSimulation.GALLERY_RUNNER   = 'runner';

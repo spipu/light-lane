@@ -170,6 +170,66 @@ class LightLaneTranslations {
                 it: 'Migliori punteggi',
                 es: 'Mejores puntuaciones'
             },
+            'menu.gallery': {
+                fr: 'Galerie',
+                en: 'Gallery',
+                it: 'Galleria',
+                es: 'Galería'
+            },
+            'gallery.locked': {
+                fr: '???',
+                en: '???',
+                it: '???',
+                es: '???'
+            },
+            'gallery.hurdle': {
+                fr: 'Haie',
+                en: 'Hurdle',
+                it: 'Ostacolo',
+                es: 'Valla'
+            },
+            'gallery.gate': {
+                fr: 'Portique',
+                en: 'Gate',
+                it: 'Portale',
+                es: 'Pórtico'
+            },
+            'gallery.block': {
+                fr: 'Bloc',
+                en: 'Block',
+                it: 'Blocco',
+                es: 'Bloque'
+            },
+            'gallery.gap': {
+                fr: 'Brèche',
+                en: 'Gap',
+                it: 'Breccia',
+                es: 'Brecha'
+            },
+            'gallery.bike': {
+                fr: 'Moto',
+                en: 'Motorbike',
+                it: 'Moto',
+                es: 'Moto'
+            },
+            'gallery.bikeTrail': {
+                fr: 'Moto à traînée',
+                en: 'Trail motorbike',
+                it: 'Moto con scia',
+                es: 'Moto con estela'
+            },
+            'gallery.sentinel': {
+                fr: 'Sentinelle',
+                en: 'Sentinel',
+                it: 'Sentinella',
+                es: 'Centinela'
+            },
+            'gallery.runner': {
+                fr: 'Coureur',
+                en: 'Runner',
+                it: 'Corridore',
+                es: 'Corredor'
+            },
             'scores.rank': {
                 fr: 'Rang',
                 en: 'Rank',
@@ -225,10 +285,10 @@ class LightLaneTranslations {
                 es: '¿Borrar todas las puntuaciones?'
             },
             'scores.clearDetail': {
-                fr: 'Les 10 meilleurs scores seront perdus.',
-                en: 'The 10 best scores will be lost.',
-                it: 'I 10 migliori punteggi andranno persi.',
-                es: 'Se perderán las 10 mejores puntuaciones.'
+                fr: 'Les 10 meilleurs scores seront perdus et la galerie sera reverrouillée.',
+                en: 'The 10 best scores will be lost and the gallery locked again.',
+                it: 'I 10 migliori punteggi andranno persi e la galleria sarà di nuovo bloccata.',
+                es: 'Se perderán las 10 mejores puntuaciones y la galería volverá a bloquearse.'
             },
             'scores.failed': {
                 fr: 'Les scores n’ont pas pu être lus ou enregistrés.',

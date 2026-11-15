@@ -1,5 +1,5 @@
 {
-    "version": "v0.0103",
+    "version": "v0.0107",
     "files": {
         "assets": [
             "/assets/lightLane/models/runner.bin",
@@ -172,6 +172,7 @@
             "/js/lightLane/lightLaneDatabaseSchema.js",
             "/js/lightLane/lightLaneSettings.js",
             "/js/lightLane/lightLaneScores.js",
+            "/js/lightLane/lightLaneGallery.js",
             "/js/lightLane/lightLaneTuning.js",
             "/js/lightLane/game/lightLaneControls.js",
             "/js/lightLane/game/lightLaneTestMode.js",
@@ -202,6 +203,8 @@
             "/js/lightLane/menu/lightLaneGameOverModal.js",
             "/js/lightLane/menu/mainMenuScreen.js",
             "/js/lightLane/menu/bestScoresScreen.js",
+            "/js/lightLane/menu/lightLaneGalleryView.js",
+            "/js/lightLane/menu/galleryScreen.js",
             "/js/lightLane/menu/lightLaneMenuNavigator.js",
             "/js/main.js"
         ]
