@@ -231,12 +231,12 @@ MainMenuScreen.LOCKED_CLASS = 'light-lane-menu-locked';
 MainMenuScreen.BACKDROP_PARTS = Object.freeze(['sky', 'sky light-lane-home-sky-lit']);
 // The mist: cells [width, height] em (the frames' 2:1), the first column MIST_ORIGIN em left of the middle (a cell's
 // middle on the middle, user request), a mirrored pair of rows rolled every MIST_ROLL seconds, its frames played at
-// MIST_FPS (half the track's FOG_FPS, user request: half the drawing); its clock counts MIST_STEP_MAX ms at most
-// between two frames.
+// MIST_FPS (the track's FOG_FPS: at half of it, it looked jerky, user request); its clock counts MIST_STEP_MAX ms at
+// most between two frames.
 MainMenuScreen.MIST_CELL      = Object.freeze([20, 10]);
 MainMenuScreen.MIST_ORIGIN    = 70;
-MainMenuScreen.MIST_ROLL      = 28;
-MainMenuScreen.MIST_FPS       = (LightLaneTuning.FOG_FPS / 2);
+MainMenuScreen.MIST_ROLL      = 14;
+MainMenuScreen.MIST_FPS       = LightLaneTuning.FOG_FPS;
 MainMenuScreen.MIST_STEP_MAX  = 100;
 MainMenuScreen.MODAL_SELECTOR = '.app-menu-overlay';
 MainMenuScreen.LESS_MOTION    = '(prefers-reduced-motion: reduce)';

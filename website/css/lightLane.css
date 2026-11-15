@@ -432,7 +432,7 @@
 /* --- Home backdrop (art § 10.1, MainMenuScreen._addBackdrop), the main menu only: the city under its sky, a floor of
    mist rolling towards it in CSS perspective (no 3D engine), lightning on the city now and then, a shade under the
    menu. The mist is a canvas MainMenuScreen draws (no CSS animation). The horizon (no line drawn, user decision) at
-   81 % of the screen, under the menu. */
+   80.66 % of the screen, under the menu. */
 
 .light-lane-home {
     overflow: hidden;
@@ -443,7 +443,7 @@
 .light-lane-home-sky {
     position: absolute;
     inset: 0;
-    /* Its city base (its lights end at 95.5 % of its height, measured) on the horizon: 85 % × 0.955 ≈ 81 %. */
+    /* Its city base (its lights end at row 687 of 724, measured) on the horizon: 85 % × 687 / 724 = 80.66 %. */
     /* Its tower's light bar (3 px right of the picture's middle) under the logo's letters, which sit left of the middle
        by half their letter spacing (the last letter's spacing is blank): 0.45em to the left. */
     /* The picture as it is, without any filter (user decision). */
@@ -469,7 +469,7 @@
    shapes on some browsers). */
 .light-lane-home-floor {
     position: absolute;
-    top: 81%;
+    top: 80.66%;
     left: -10%;
     width: 120%;
     height: 13em;
