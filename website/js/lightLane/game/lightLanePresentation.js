@@ -581,8 +581,8 @@ class LightLanePresentation {
     }
 
     /**
-     * A bike's light trail (gameplay § 6.3): from its back, TRAIL_LENGTH along the path it left, band by band (each
-     * dimmer); straight runs in long pieces, the curve of a lane change in short ones turned along it.
+     * A bike's light trail (gameplay § 6.3): from its back, TRAIL_LENGTH along the path it left, band by band
+     * (TRAIL_FADE); straight runs in long pieces, the curve of a lane change in short ones turned along it.
      */
     _drawTrail(entity) {
         if (!entity.hasTrail()) {

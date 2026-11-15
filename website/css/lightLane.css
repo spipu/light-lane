@@ -490,42 +490,51 @@
     color: #E2F6FA;
 }
 
-/* Top right (user request): the score 64 px; under it the run's line (distance, coins, time) 26 px, then the
-   record's line (BEST, its score, distance, coins, time) 22 px in the aid colour, dimmer, in the same columns; a value
-   of the run past the record's lights up. */
-.light-lane-hud-score-block {
+/* Top right (user request), one grid: the run's line (time, coins, distance, score), then the record's (BEST, its time,
+   coins, distance, score) in the aid colour, dimmer, in the same columns, both 32 px (3cqh), the scores 43 px
+   (4cqh); a value of the run past the record's lights up. */
+.light-lane-hud-stats {
     position: absolute;
     top: 2.5cqh;
     right: 3.9cqh;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.4cqh;
-    line-height: 1.1;
-    text-shadow: 0 0 0.4em rgba(120, 214, 232, 0.55);
-}
-
-.light-lane-hud-score {
-    font-size: 5.93cqh;
-    font-weight: 500;
-    letter-spacing: 0.04em;
-    transition: color 0.3s;
-}
-
-/* The run's line over the record's, one grid: distance, coins and time aligned in columns (user request). */
-.light-lane-hud-stats {
     display: grid;
-    grid-template-columns: repeat(4, auto);
+    grid-template-columns: repeat(5, auto);
     column-gap: 0.9em;
     row-gap: 0.4cqh;
     justify-items: end;
-    align-items: center;
+    align-items: baseline;
+    line-height: 1.1;
     letter-spacing: 0.08em;
     font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 0.4em rgba(120, 214, 232, 0.55);
+}
+
+/* A value's cell: its room (a hidden copy of its largest value) and the value, right-aligned on the same spot; a digit
+   in a box as wide as Oswald's widest figure (0: 0.517 em) and the letter spacing, so the columns never move. */
+.light-lane-hud-cell {
+    display: inline-grid;
+}
+
+.light-lane-hud-ghost,
+.light-lane-hud-line {
+    grid-area: 1 / 1;
+    justify-self: end;
+    white-space: pre;
+}
+
+.light-lane-hud-ghost {
+    visibility: hidden;
+}
+
+.light-lane-hud-digit {
+    display: inline-block;
+    width: 0.6em;
+    text-align: center;
+    letter-spacing: 0;
 }
 
 .light-lane-hud-run {
-    font-size: 2.41cqh;
+    font-size: 3cqh;
     color: #E2F6FA;
 }
 
@@ -537,9 +546,14 @@
 }
 
 .light-lane-hud-best {
-    font-size: 2.04cqh;
+    font-size: 3cqh;
     color: #78D6E8;
     opacity: 0.85;
+}
+
+/* Both scores larger than the rest of their line (user request), on its baseline. */
+.light-lane-hud-stat.light-lane-hud-score {
+    font-size: 4cqh;
 }
 
 .light-lane-hud-best-label {
@@ -548,7 +562,7 @@
 
 .light-lane-hud-stat {
     display: inline-flex;
-    align-items: center;
+    align-items: baseline;
     gap: 0.3em;
     transition: color 0.3s, text-shadow 0.3s;
 }

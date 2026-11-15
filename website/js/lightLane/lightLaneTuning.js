@@ -242,13 +242,13 @@ LightLaneTuning.STALKER_WARN       = 2.4;
 LightLaneTuning.STALKER_MOVE       = 1.6;
 LightLaneTuning.STALKER_MOVE_TIME  = 0.5;
 // From TRAIL_TIER (4 200 m, user decision), a bike leaves a light trail behind its back: TRAIL_LENGTH long (user request:
-// 25 m, from 30) in
-// TRAIL_BANDS bands each dimmer than the one before (TRAIL_FADE of the colour), TRAIL_THICK thick (a quarter of the
-// tyre) and TRAIL_HEIGHT high (the tyre's); it follows the bike's path, kills at a touch, a jump clears it.
+// 25 m, from 30), of one light all along (user request: no dimmer end; TRAIL_BANDS bands of TRAIL_FADE of the colour),
+// TRAIL_THICK thick (a quarter of the tyre) and TRAIL_HEIGHT high (the tyre's); it follows the bike's path, kills at a
+// touch, a jump clears it.
 LightLaneTuning.TRAIL_TIER   = 7;
 LightLaneTuning.TRAIL_LENGTH = 25;
-LightLaneTuning.TRAIL_BANDS  = 3;
-LightLaneTuning.TRAIL_FADE   = Object.freeze([1.0, 0.6, 0.3]);
+LightLaneTuning.TRAIL_BANDS  = 1;
+LightLaneTuning.TRAIL_FADE   = Object.freeze([1.0]);
 LightLaneTuning.TRAIL_THICK  = 0.085;
 LightLaneTuning.TRAIL_HEIGHT = 1.2;
 // Its drawn pieces: straight runs in TRAIL_PIECE_LONG pieces, the curve of a lane change in TRAIL_PIECE_SHORT ones.
@@ -291,10 +291,10 @@ LightLaneTuning.ENEMY_SHAPE = Object.freeze({
     cowlThick:   0.12,
     arcStations: 9,
     middle:      Object.freeze([-0.45, 0, 0.4]),
-    top:         Object.freeze([[-2.0, 1.02], [-1.65, 1.30], [-1.28, 1.40], [-0.85, 1.47], [-0.45, 1.58], [0.1, 1.50], [0.6, 1.42], [2.0, 1.38]]),
-    belly:       Object.freeze([[-2.0, 0.40], [-0.6, 0.34], [0.2, 0.42], [0.8, 0.62], [2.0, 0.62]]),
-    width:       Object.freeze([[-2.0, 0.22], [-1.3, 0.28], [-0.45, 0.40], [0.3, 0.36], [1.4, 0.30], [2.0, 0.28]]),
-    flank:       Object.freeze([[-2.0, 0.80], [-1.28, 1.31], [-0.35, 1.02], [0.8, 1.12], [1.37, 1.31], [2.0, 1.18]]),
+    top:         Object.freeze([[-2.0, 0.62], [-1.75, 1.10], [-1.28, 1.40], [-0.85, 1.47], [-0.45, 1.58], [0.1, 1.50], [0.6, 1.42], [2.0, 1.38]]),
+    belly:       Object.freeze([[-2.0, 0.55], [-0.6, 0.34], [0.2, 0.42], [0.8, 0.62], [2.0, 0.62]]),
+    width:       Object.freeze([[-2.0, 0.10], [-1.85, 0.22], [-1.3, 0.28], [-0.45, 0.40], [0.3, 0.36], [1.4, 0.30], [2.0, 0.28]]),
+    flank:       Object.freeze([[-2.0, 0.68], [-1.28, 1.31], [-0.35, 1.02], [0.8, 1.12], [1.37, 1.31], [2.0, 1.18]]),
     glass:       Object.freeze([-1.05, 0.2]),
     band:        0.07,
     light:       Object.freeze([0.16, 0.08]),
