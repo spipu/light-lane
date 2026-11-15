@@ -1,6 +1,6 @@
 /**
- * The gallery (gameplay § 14, art § 10): on the left the list of its items, the locked ones as « ??? » (greyed, not
- * selectable); on the right the item highlighted in 3D (LightLaneGalleryView) with its name. Up / Down walk the list,
+ * The gallery (gameplay § 14, art § 10): on the left the list of its items, the locked ones as « ??? » (greyed, a
+ * notice in the view); on the right the item highlighted in 3D (LightLaneGalleryView), its name only in the list (user request). Up / Down walk the list,
  * Left / Right (held), the gamepad's stick or a finger dragged across the view (any way) turn the item.
  */
 class GalleryScreen extends AbstractLightLaneMenuScreen {
@@ -8,8 +8,8 @@ class GalleryScreen extends AbstractLightLaneMenuScreen {
         super(navigator, display);
 
         this._view      = null;
-        this._nameEl    = null;
-        this._items     = [];      // the unlocked items, in the order of their list entries
+        this._lockedEl  = null;
+        this._items     = [];      // the items in the order of their list entries, null where locked
         this._held      = {left: false, right: false};
         this._swipeX    = null;    // the finger's last position on the view, null while none is down
         this._swipeY    = 0;
@@ -24,23 +24,23 @@ class GalleryScreen extends AbstractLightLaneMenuScreen {
         this._container.classList.add('light-lane-gallery');
         detail.classList.add('light-lane-gallery-detail');
         const host   = AppMenuDom.addElement(detail, 'div', 'light-lane-gallery-view');
-        this._nameEl = AppMenuDom.addText(detail, 'light-lane-gallery-name', '');
+        this._lockedEl = AppMenuDom.addText(detail, 'light-lane-gallery-locked', appTranslator.get('gallery.notUnlocked'));
         this._bindSwipe(host);
 
-        this._items = LightLaneTuning.GALLERY_ITEMS.filter((item) => lightLaneGallery.isUnlocked(item));
-        for (const item of LightLaneTuning.GALLERY_ITEMS) {
-            if (lightLaneGallery.isUnlocked(item)) {
-                this._nav.addItemIn(listEl, appTranslator.get('gallery.' + item), () => {});
-                continue;
+        // Every item in the list, the locked ones too (user request): « ??? », greyed, nothing in the view but a notice.
+        this._items = LightLaneTuning.GALLERY_ITEMS.map((item) => (lightLaneGallery.isUnlocked(item) ? item : null));
+        for (const item of this._items) {
+            const entry = this._nav.addItemIn(listEl, appTranslator.get((item !== null) ? ('gallery.' + item) : 'gallery.locked'), () => {});
+            if (item === null) {
+                entry.classList.add(MainMenuScreen.LOCKED_CLASS);
             }
-            AppMenuDom.addListItem(listEl, appTranslator.get('gallery.locked')).classList.add(MainMenuScreen.LOCKED_CLASS);
         }
         this._addBackButton(panel);
         this._nav.setOnSelect((index) => this._select(index));
 
-        this._view = new LightLaneGalleryView(host).start(this._items[0] ?? LightLaneTuning.GALLERY_ITEMS[0]);
+        this._view = new LightLaneGalleryView(host).start(this._items[0]);
+        // Its first item shown (setOnSelect).
         this._nav.selectFirst();
-        this._select(0);
         document.addEventListener('keydown', this._onKeyDown);
         document.addEventListener('keyup', this._onKeyUp);
         window.addEventListener('blur', this._onBlur);
@@ -67,11 +67,12 @@ class GalleryScreen extends AbstractLightLaneMenuScreen {
         if ((item === undefined) || (this._view === null)) {
             return;
         }
-        this._nameEl.textContent = appTranslator.get('gallery.' + item);
+        this._lockedEl.classList.toggle(GalleryScreen.SHOWN_CLASS, (item === null));
         this._view.show(item);
     }
 
-    // Left / Right held turn the item (the list's own navigation ignores them: its entries have no value to change).
+    // Left / Right held turn the item (the list's own navigation ignores them: its entries have no value to change; on
+    // the Back button they walk nothing and still turn it, which is harmless).
     _key(event, down) {
         if ((event.key !== GalleryScreen.KEY_LEFT) && (event.key !== GalleryScreen.KEY_RIGHT)) {
             return;
@@ -115,5 +116,7 @@ class GalleryScreen extends AbstractLightLaneMenuScreen {
     }
 }
 
-GalleryScreen.KEY_LEFT  = 'ArrowLeft';
-GalleryScreen.KEY_RIGHT = 'ArrowRight';
+GalleryScreen.KEY_LEFT    = 'ArrowLeft';
+GalleryScreen.KEY_RIGHT   = 'ArrowRight';
+// The notice of a locked item, shown.
+GalleryScreen.SHOWN_CLASS = 'light-lane-gallery-locked-shown';

@@ -2,7 +2,11 @@
  * The gallery's 3D view (art § 10): an item of the game (its objects, built by LightLaneModels as for a run) turning on
  * itself in a canvas of the gallery screen, framed on its bounding sphere, lit and rendered as in the game. It turns on
  * its own until the player turns it (Left / Right held, the stick, a finger or the mouse dragged across: up and down
- * too, the camera going over or under it), then stays where it was left until the next item; the runner plays its clips in turn (GALLERY_RUNNER_CLIPS), its jump with its rise.
+ * too, the camera going over or under it), then stays where it was left until the next item; the runner plays its
+ * clips in turn (GALLERY_RUNNER_CLIPS), its jump with its rise.
+ *
+ * The objects are built once and kept between two visits (and their instances reused) until a run resets the loader
+ * (unload(), called by the navigator as a run starts).
  */
 class LightLaneGalleryView {
     /**
@@ -32,36 +36,44 @@ class LightLaneGalleryView {
         this._rotation   = [0, 0, 0];
         this._last       = null;
         this._pad        = new AppInputGamepad();
-        this._observer   = new ResizeObserver(() => this._resize());
+        this._resizeTimer = null;
+        // A size that changes on and on (a window dragged): the canvas built again once it rests.
+        this._observer   = new ResizeObserver(() => {
+            clearTimeout(this._resizeTimer);
+            this._resizeTimer = setTimeout(() => this._resize(), LightLaneGalleryView.RESIZE_DELAY_MS);
+        });
         this._frame      = (timestamp) => this._animate(timestamp);
+    }
+
+    // The loader reset (a run starts): the objects built for the gallery are gone.
+    static unload() {
+        LightLaneGalleryView._loaded = false;
+        LightLaneGalleryView._instances.clear();
+        LightLaneGalleryView._runner = null;
     }
 
     /**
      * The objects loaded (as for a run), then the item shown.
      *
-     * @param {string} item - one of LightLaneTuning.GALLERY_ITEMS
+     * @param {string|null} item - one of LightLaneTuning.GALLERY_ITEMS, null for none
      */
     start(item) {
         this._item    = item;
         this._running = true;
         this._host.id = LightLaneGalleryView.HOST_ID;
+        if (LightLaneGalleryView._loaded) {
+            this._loaded();
+            return this;
+        }
         loader.reset();
+        LightLaneGalleryView.unload();
         loader.beginBatch();
         LightLaneModels.load(false);
         loader.setCallback(() => {
             loader.clearCallback();
-            if (!this._running) {
-                return;
-            }
             LightLaneModels.compensate();
-            this._model  = loader.animatedModels().getByCode(LightLaneModels.RUNNER);
-            this._runner = new AnimatedInstance(this._model).bind();
-            this._runner.getInstance().setRenderLight(LightLaneTuning.LIGHT_COMPENSATION);
-            this._ready  = true;
-            this._observer.observe(this._host);
-            this._resize();
-            this.show(this._item);
-            requestAnimationFrame(this._frame);
+            LightLaneGalleryView._loaded = true;
+            this._loaded();
         });
         loader.endBatch();
 
@@ -71,13 +83,40 @@ class LightLaneGalleryView {
     stop() {
         this._running = false;
         this._ready   = false;
+        clearTimeout(this._resizeTimer);
         this._observer.disconnect();
         this._destroyScreen();
-        loader.reset();
+    }
+
+    _loaded() {
+        if (!this._running) {
+            return;
+        }
+        this._model = loader.animatedModels().getByCode(LightLaneModels.RUNNER);
+        if (LightLaneGalleryView._runner === null) {
+            LightLaneGalleryView._runner = new AnimatedInstance(this._model).bind();
+            LightLaneGalleryView._runner.getInstance().setRenderLight(LightLaneTuning.LIGHT_COMPENSATION);
+        }
+        this._runner = LightLaneGalleryView._runner;
+        this._ready  = true;
+        this._observer.observe(this._host);
+        this._resize();
+        this.show(this._item);
+        requestAnimationFrame(this._frame);
+    }
+
+    // An object's instance, one a code, reused from one item (and one visit) to the next.
+    static _instance(code) {
+        const instances = LightLaneGalleryView._instances;
+        if (!instances.has(code)) {
+            instances.set(code, LightLanePresentation.instance(LightLaneModels.objectId(code)));
+        }
+
+        return instances.get(code);
     }
 
     /**
-     * @param {string} item - one of LightLaneTuning.GALLERY_ITEMS
+     * @param {string|null} item - one of LightLaneTuning.GALLERY_ITEMS, null for none (a locked item: nothing drawn)
      */
     show(item) {
         this._item   = item;
@@ -89,6 +128,9 @@ class LightLaneGalleryView {
             return this;
         }
         this._parts.length = 0;
+        if (item === null) {
+            return this;
+        }
         if (item === LightLaneGalleryView.RUNNER) {
             this._centreY = LightLaneGalleryView.RUNNER_CENTRE * LightLaneTuning.RUNNER_HEIGHT;
             this._radius  = LightLaneGalleryView.RUNNER_RADIUS * LightLaneTuning.RUNNER_HEIGHT;
@@ -97,7 +139,7 @@ class LightLaneGalleryView {
             return this;
         }
         for (const [code, x, y, z, yaw] of LightLaneGalleryView._layout(item)) {
-            this._parts.push({instance: LightLanePresentation.instance(LightLaneModels.objectId(code)), x: x, y: y, z: z, yaw: yaw});
+            this._parts.push({instance: LightLaneGalleryView._instance(code), x: x, y: y, z: z, yaw: yaw});
         }
         // A gap is its hole (in the middle of its tile, at the top's height): framed on it, the tile running out of the view.
         if (item === LightLaneGalleryView.GAP_ITEM) {
@@ -143,7 +185,8 @@ class LightLaneGalleryView {
                 return [[LightLaneModels.blockCode(LightLaneGalleryView.BLOCK) + LightLaneModels.BLOCK_SIDES[1][0], 0, 0, 0, 0]];
             case 'gap': {
                 const y     = -LightLaneTuning.TILE_THICKNESS;
-                const parts = [[LightLaneModels.gapTileCode(LightLaneGalleryView.GAP), 0, y, 0, 0]];
+                // The lane's edge lines on both sides (user request): its tile's own on the left, the right edge cut at the hole.
+                const parts = [[LightLaneModels.gapTileCode(LightLaneGalleryView.GAP), 0, y, 0, 0], [LightLaneModels.tileEdgeCode(LightLaneGalleryView.GAP), 0, y, 0, 0]];
                 for (const side of LightLanePresentation.SIDES) {
                     for (const wall of LightLaneModels.holeWalls(LightLaneGalleryView.GAP, side, LightLaneModels.TILE)) {
                         parts.push([wall, (side * LightLaneTuning.LANE_WIDTH / 2), y, 0, 0]);
@@ -325,6 +368,13 @@ class LightLaneGalleryView {
 }
 
 LightLaneGalleryView.HOST_ID       = 'lightLaneGalleryView';
+// The objects built in the loader for the gallery (kept between visits until a run resets it), their instances by code
+// and the runner's.
+LightLaneGalleryView._loaded       = false;
+LightLaneGalleryView._instances    = new Map();
+LightLaneGalleryView._runner       = null;
+// A size change waits this long for the next before the canvas is built again, ms.
+LightLaneGalleryView.RESIZE_DELAY_MS = 200;
 LightLaneGalleryView.RUNNER        = 'runner';
 // The block and the gap shown (a mid length).
 LightLaneGalleryView.BLOCK         = 'B6';

@@ -46,6 +46,8 @@ class LightLaneMenuNavigator {
     // The run replaces the menus (modelled on RacingMenuNavigator.startRace).
     startGame() {
         this._switchTo(null);
+        // The run resets the loader: the gallery's objects go.
+        LightLaneGalleryView.unload();
         this._display.destroy();
         new LightLaneGame(this, this._testMode).start().catch((error) => {
             console.error(error);

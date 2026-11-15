@@ -182,6 +182,12 @@ class LightLaneTranslations {
                 it: '???',
                 es: '???'
             },
+            'gallery.notUnlocked': {
+                fr: 'Non débloqué',
+                en: 'Not unlocked',
+                it: 'Non sbloccato',
+                es: 'No desbloqueado'
+            },
             'gallery.hurdle': {
                 fr: 'Haie',
                 en: 'Hurdle',
