@@ -74,8 +74,8 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
      * The home's backdrop (art § 10.1, user requests: only on this screen, the city and the mist): the city under its
      * sky as it is, lightning on its lights now and then, a floor of mist rolling towards it, a shade under the menu;
      * laid out in CSS (css/lightLane.css), whatever the 3D renderer, gone with the screen. The mist as the track's
-     * (user request): the game's fog frames played at MIST_FPS on cells mirrored every other one across and along,
-     * drawn in a canvas (no CSS animation nor background changed at each frame: WebKit made them jump).
+     * (user request): the game's fog frames played at MIST_FPS, faded, on cells mirrored every other one across and
+     * along, drawn in a canvas (no CSS animation nor background changed at each frame: WebKit made them jump).
      */
     _addBackdrop() {
         const backdrop = AppMenuDom.addElement(this._container, 'div', 'app-menu-screen-background light-lane-home');
@@ -171,7 +171,7 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
     }
 
     // The mist's clock runs while the home is seen (not under a modal; the browser stops the frames of a hidden page),
-    // a long gap counted MIST_STEP_MAX at most; the canvas is drawn again at each new fog frame (MIST_FPS).
+    // a long gap counted MIST_STEP_MAX at most; the canvas is drawn MIST_DRAWS times a second.
     _animateMist(time) {
         this._mistLoop = requestAnimationFrame((next) => this._animateMist(next));
         const step     = ((this._mistLast !== null) ? Math.min((time - this._mistLast), MainMenuScreen.MIST_STEP_MAX) : 0);
@@ -180,30 +180,40 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
             return;
         }
         this._mistClock += step;
-        if (Math.floor((this._mistClock * MainMenuScreen.MIST_FPS) / MainMenuScreen.MS_PER_SECOND) !== this._mistDrawn) {
+        if (Math.floor((this._mistClock * MainMenuScreen.MIST_DRAWS) / MainMenuScreen.MS_PER_SECOND) !== this._mistDrawn) {
             this._drawMist();
         }
     }
 
-    // The mist at its clock: the fog frame of the moment on cells MIST_CELL em large, mirrored every other one across
-    // and along (neighbours join without a seam, as on the track), the first column MIST_ORIGIN em left of the middle,
-    // the rows rolling towards the viewer by a mirrored pair every MIST_ROLL seconds. Whole pixels: no seam.
+    // The mist at its clock: the fog frame of the moment (MIST_FPS) faded into the next one between two changes (no
+    // jump from frame to frame), on cells MIST_CELL em large, mirrored every other one across and along (neighbours
+    // join without a seam, as on the track), the first column MIST_ORIGIN em left of the middle, the rows rolling
+    // towards the viewer by a mirrored pair every MIST_ROLL seconds and drifting right by MIST_DRIFT of that way (each
+    // loops on a mirrored pair, the pattern stays whole), placed to the fraction of a pixel (a slow roll rounded to
+    // whole pixels jumped a pixel at a time, user report); each cell drawn MIST_OVERLAP pixel past its neighbour (their
+    // mirrored edges are the same), so the fractions open no seam.
     _drawMist() {
         const images = MainMenuScreen._mistImages;
         if ((images === null) || (this._mist === null)) {
             return;
         }
         this._fitMist();
-        const tick                  = Math.floor((this._mistClock * MainMenuScreen.MIST_FPS) / MainMenuScreen.MS_PER_SECOND);
-        const image                 = images[tick % LightLaneTuning.FOG_FRAMES];
+        const draw                  = Math.floor((this._mistClock * MainMenuScreen.MIST_DRAWS) / MainMenuScreen.MS_PER_SECOND);
+        const perFrame              = (MainMenuScreen.MIST_DRAWS / MainMenuScreen.MIST_FPS);
+        const frame                 = (Math.floor(draw / perFrame) % LightLaneTuning.FOG_FRAMES);
+        const fade                  = ((draw % perFrame) / perFrame);
         const [width, height, em]   = this._mistSize;
         const cellWidth             = Math.round(MainMenuScreen.MIST_CELL[0] * em);
         const cellHeight            = Math.round(MainMenuScreen.MIST_CELL[1] * em);
-        const left                  = Math.round((width / 2) - (MainMenuScreen.MIST_ORIGIN * em));
         const pair                  = (2 * cellHeight);
-        const roll                  = Math.round((((this._mistClock / MainMenuScreen.MS_PER_SECOND) / MainMenuScreen.MIST_ROLL) % 1) * pair);
+        const way                   = (((this._mistClock / MainMenuScreen.MS_PER_SECOND) / MainMenuScreen.MIST_ROLL) * pair);
+        const roll                  = (way % pair);
+        const drift                 = ((way * MainMenuScreen.MIST_DRIFT) % (2 * cellWidth));
+        const left                  = (Math.round((width / 2) - (MainMenuScreen.MIST_ORIGIN * em)) + drift);
+        const drawnWidth            = (cellWidth + MainMenuScreen.MIST_OVERLAP);
+        const drawnHeight           = (cellHeight + MainMenuScreen.MIST_OVERLAP);
         const context               = this._mistContext;
-        this._mistDrawn             = tick;
+        this._mistDrawn             = draw;
         context.setTransform(1, 0, 0, 1, 0, 0);
         context.clearRect(0, 0, width, height);
         for (let column = Math.floor(-left / cellWidth); (left + (column * cellWidth)) < width; column++) {
@@ -213,9 +223,15 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
                 const y     = ((roll - pair) + (row * cellHeight));
                 const along = ((row % 2) === 1);
                 context.setTransform(((across) ? -1 : 1), 0, 0, ((along) ? -1 : 1), ((across) ? (x + cellWidth) : x), ((along) ? (y + cellHeight) : y));
-                context.drawImage(image, 0, 0, cellWidth, cellHeight);
+                context.globalAlpha = 1;
+                context.drawImage(images[frame], 0, 0, drawnWidth, drawnHeight);
+                if (fade > 0) {
+                    context.globalAlpha = fade;
+                    context.drawImage(images[(frame + 1) % LightLaneTuning.FOG_FRAMES], 0, 0, drawnWidth, drawnHeight);
+                }
             }
         }
+        context.globalAlpha = 1;
         context.setTransform(1, 0, 0, 1, 0, 0);
     }
 
@@ -265,15 +281,20 @@ MainMenuScreen.LOCKED_CLASS = 'light-lane-menu-locked';
 // The backdrop's layers behind the floor, back to front (light-lane-home-* in css/lightLane.css).
 MainMenuScreen.BACKDROP_PARTS = Object.freeze(['sky', 'sky light-lane-home-sky-lit']);
 // The mist: cells [width, height] em (the frames' 2:1), the first column MIST_ORIGIN em left of the middle (a cell's
-// middle on the middle, user request), a mirrored pair of rows rolled every MIST_ROLL seconds, its frames played at
-// MIST_FPS (the track's FOG_FPS: at half of it, it looked jerky, user request); its clock counts MIST_STEP_MAX ms at
-// most between two frames.
+// middle on the middle, user request); drawn MIST_DRAWS times a second, its fog frame changed MIST_FPS times a second
+// and faded into the next one in between, a mirrored pair of rows rolled every MIST_ROLL seconds (user requests: 10
+// draws a second without jumps, slower, then a pair in 70 s: ≈ 4.7 px/s of its canvas on a 1080p screen), drifting
+// right by MIST_DRIFT of the way it rolls (user request); its clock counts MIST_STEP_MAX ms at most between two frames.
 MainMenuScreen.MIST_CELL      = Object.freeze([20, 10]);
 MainMenuScreen.MIST_ORIGIN    = 70;
-MainMenuScreen.MIST_ROLL      = 14;
+MainMenuScreen.MIST_ROLL      = 70;
+MainMenuScreen.MIST_DRIFT     = 0.1;
+MainMenuScreen.MIST_DRAWS     = 10;
+// Each cell drawn this many pixels past its neighbour: no seam at fractional places.
+MainMenuScreen.MIST_OVERLAP   = 1;
 // Its canvas's resolution, as a share of its size on screen (user decision: half, a quarter of the pixels).
 MainMenuScreen.MIST_SCALE     = 0.5;
-MainMenuScreen.MIST_FPS       = LightLaneTuning.FOG_FPS;
+MainMenuScreen.MIST_FPS       = 5;
 MainMenuScreen.MIST_STEP_MAX  = 100;
 MainMenuScreen.MODAL_SELECTOR = '.app-menu-overlay';
 MainMenuScreen.LESS_MOTION    = '(prefers-reduced-motion: reduce)';
