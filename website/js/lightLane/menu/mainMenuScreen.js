@@ -10,24 +10,29 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
     constructor(navigator, display) {
         super(navigator, display);
 
-        this._mist       = null;
-        this._mistTimer  = null;
-        this._mistFrame  = 0;
-        this._lightning  = null;
-        this._flashTimer = null;
+        this._mist        = null;
+        this._mistContext = null;
+        this._mistLoop    = null;
+        this._mistClock   = 0;
+        this._mistLast    = null;
+        this._mistDrawn   = -1;
+        this._mistSize    = [0, 0, 0];
+        this._lightning   = null;
+        this._flashTimer  = null;
     }
 
     hide() {
-        if (this._mistTimer !== null) {
-            clearInterval(this._mistTimer);
-            this._mistTimer = null;
+        if (this._mistLoop !== null) {
+            cancelAnimationFrame(this._mistLoop);
+            this._mistLoop = null;
         }
         if (this._flashTimer !== null) {
             clearTimeout(this._flashTimer);
             this._flashTimer = null;
         }
-        this._mist      = null;
-        this._lightning = null;
+        this._mist        = null;
+        this._mistContext = null;
+        this._lightning   = null;
         MainMenuScreen._releaseMistFrames();
 
         return super.hide();
@@ -67,9 +72,10 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
 
     /**
      * The home's backdrop (art § 10.1, user requests: only on this screen, the city and the mist): the city under its
-     * sky, lightning on its lights now and then, a floor of mist rolling towards it, a shade under the menu; laid out
-     * in CSS (css/lightLane.css), whatever the 3D renderer, gone with the screen. The mist as the track's (user
-     * request): the game's fog frames played at FOG_FPS on a grid of cells mirrored every other one across and along.
+     * sky as it is, lightning on its lights now and then, a floor of mist rolling towards it, a shade under the menu;
+     * laid out in CSS (css/lightLane.css), whatever the 3D renderer, gone with the screen. The mist as the track's
+     * (user request): the game's fog frames played at MIST_FPS on cells mirrored every other one across and along,
+     * drawn in a canvas (no CSS animation nor background changed at each frame: WebKit made them jump).
      */
     _addBackdrop() {
         const backdrop = AppMenuDom.addElement(this._container, 'div', 'app-menu-screen-background light-lane-home');
@@ -77,27 +83,28 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
         for (const part of MainMenuScreen.BACKDROP_PARTS) {
             AppMenuDom.addElement(backdrop, 'div', 'light-lane-home-' + part);
         }
-        this._lightning = backdrop.querySelector(MainMenuScreen.LIGHTNING_SELECTOR);
-        const floor = AppMenuDom.addElement(backdrop, 'div', 'light-lane-home-floor');
-        this._mist  = AppMenuDom.addElement(floor, 'div', 'light-lane-home-mist');
-        const [columns, rows] = MainMenuScreen.MIST_CELLS;
-        for (let row = 0; row < rows; row++) {
-            for (let column = 0; column < columns; column++) {
-                const cell = AppMenuDom.addElement(this._mist, 'div', 'light-lane-home-mist-cell');
-                cell.classList.toggle(MainMenuScreen.MIRROR_ACROSS, ((column % 2) === 1));
-                cell.classList.toggle(MainMenuScreen.MIRROR_ALONG, ((row % 2) === 1));
-            }
-        }
+        this._lightning   = backdrop.querySelector(MainMenuScreen.LIGHTNING_SELECTOR);
+        const floor       = AppMenuDom.addElement(backdrop, 'div', 'light-lane-home-floor');
+        this._mist        = AppMenuDom.addElement(floor, 'canvas', 'light-lane-home-mist');
+        this._mistContext = this._mist.getContext('2d');
+        this._mistClock   = 0;
+        this._mistLast    = null;
+        this._mistDrawn   = -1;
         AppMenuDom.addElement(backdrop, 'div', 'light-lane-home-shade');
-        this._showMistFrame();
-        if (window.matchMedia(MainMenuScreen.LESS_MOTION).matches) {
-            return;
+        const still = window.matchMedia(MainMenuScreen.LESS_MOTION).matches;
+        if (!still) {
+            this._planFlash();
         }
-        this._planFlash();
-        // Played once every frame is decoded: a frame shown before its decoding paints nothing (the mist stayed black).
-        MainMenuScreen._decodeMistFrames().then(() => {
-            if ((this._mist !== null) && (this._mistTimer === null)) {
-                this._mistTimer = setInterval(() => this._nextMistFrame(), (MainMenuScreen.MS_PER_SECOND / LightLaneTuning.FOG_FPS));
+        const decoded = MainMenuScreen._decodeMistFrames();
+        // The first frame as soon as it is decoded, the others played once all are: a frame not decoded paints nothing.
+        MainMenuScreen._mistImages[0].decode().then(() => {
+            if ((this._mist !== null) && (this._mistDrawn < 0)) {
+                this._drawMist();
+            }
+        }).catch(() => null);
+        decoded.then(() => {
+            if ((this._mist !== null) && !still && (this._mistLoop === null)) {
+                this._mistLoop = requestAnimationFrame((time) => this._animateMist(time));
             }
         }).catch((error) => console.warn('MainMenuScreen - the mist frames could not be decoded', error));
     }
@@ -129,6 +136,69 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
         MainMenuScreen._mistDecoded = null;
     }
 
+    // The mist's clock runs while the home is seen (not under a modal; the browser stops the frames of a hidden page),
+    // a long gap counted MIST_STEP_MAX at most; the canvas is drawn again at each new fog frame (MIST_FPS).
+    _animateMist(time) {
+        this._mistLoop = requestAnimationFrame((next) => this._animateMist(next));
+        const step     = ((this._mistLast !== null) ? Math.min((time - this._mistLast), MainMenuScreen.MIST_STEP_MAX) : 0);
+        this._mistLast = time;
+        if (this._display.getContainer().querySelector(MainMenuScreen.MODAL_SELECTOR) !== null) {
+            return;
+        }
+        this._mistClock += step;
+        if (Math.floor((this._mistClock * MainMenuScreen.MIST_FPS) / MainMenuScreen.MS_PER_SECOND) !== this._mistDrawn) {
+            this._drawMist();
+        }
+    }
+
+    // The mist at its clock: the fog frame of the moment on cells MIST_CELL em large, mirrored every other one across
+    // and along (neighbours join without a seam, as on the track), the first column MIST_ORIGIN em left of the middle,
+    // the rows rolling towards the viewer by a mirrored pair every MIST_ROLL seconds. Whole pixels: no seam.
+    _drawMist() {
+        const images = MainMenuScreen._mistImages;
+        if ((images === null) || (this._mist === null)) {
+            return;
+        }
+        this._fitMist();
+        const tick                  = Math.floor((this._mistClock * MainMenuScreen.MIST_FPS) / MainMenuScreen.MS_PER_SECOND);
+        const image                 = images[tick % LightLaneTuning.FOG_FRAMES];
+        const [width, height, em]   = this._mistSize;
+        const cellWidth             = Math.round(MainMenuScreen.MIST_CELL[0] * em);
+        const cellHeight            = Math.round(MainMenuScreen.MIST_CELL[1] * em);
+        const left                  = Math.round((width / 2) - (MainMenuScreen.MIST_ORIGIN * em));
+        const pair                  = (2 * cellHeight);
+        const roll                  = Math.round((((this._mistClock / MainMenuScreen.MS_PER_SECOND) / MainMenuScreen.MIST_ROLL) % 1) * pair);
+        const context               = this._mistContext;
+        this._mistDrawn             = tick;
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.clearRect(0, 0, width, height);
+        for (let column = Math.floor(-left / cellWidth); (left + (column * cellWidth)) < width; column++) {
+            const x      = (left + (column * cellWidth));
+            const across = ((((column % 2) + 2) % 2) === 1);
+            for (let row = 0; ((roll - pair) + (row * cellHeight)) < height; row++) {
+                const y     = ((roll - pair) + (row * cellHeight));
+                const along = ((row % 2) === 1);
+                context.setTransform(((across) ? -1 : 1), 0, 0, ((along) ? -1 : 1), ((across) ? (x + cellWidth) : x), ((along) ? (y + cellHeight) : y));
+                context.drawImage(image, 0, 0, cellWidth, cellHeight);
+            }
+        }
+        context.setTransform(1, 0, 0, 1, 0, 0);
+    }
+
+    // The canvas at the floor's size in CSS pixels (the mist is soft: no device pixel ratio), and the em there.
+    _fitMist() {
+        const width  = this._mist.clientWidth;
+        const height = this._mist.clientHeight;
+        if ((width === this._mistSize[0]) && (height === this._mistSize[1])) {
+            return;
+        }
+        this._mist.width  = width;
+        this._mist.height = height;
+        this._mistSize[0] = width;
+        this._mistSize[1] = height;
+        this._mistSize[2] = parseFloat(getComputedStyle(this._mist).fontSize);
+    }
+
     // The next lightning, FLASH_EVERY [min, max] seconds from now.
     _planFlash() {
         const [min, max] = MainMenuScreen.FLASH_EVERY;
@@ -146,20 +216,6 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
         this._planFlash();
     }
 
-    // The next frame, unless nothing would see it (a modal over the menu, the page hidden).
-    _nextMistFrame() {
-        if (document.hidden || (this._display.getContainer().querySelector(MainMenuScreen.MODAL_SELECTOR) !== null)) {
-            return;
-        }
-        this._mistFrame = ((this._mistFrame + 1) % LightLaneTuning.FOG_FRAMES);
-        this._showMistFrame();
-    }
-
-    // One custom property for every cell (their background reads it): one style write a frame.
-    _showMistFrame() {
-        this._mist.style.setProperty(MainMenuScreen.MIST_PROPERTY, MainMenuScreen.MIST_FRAMES[this._mistFrame]);
-    }
-
     _addLogo(titleEl) {
         AppMenuDom.addText(titleEl, 'light-lane-logo-word', MainMenuScreen.LOGO_WORDS[0]);
         AppMenuDom.addText(titleEl, 'light-lane-logo-accent', MainMenuScreen.LOGO_WORDS[1]);
@@ -171,16 +227,17 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
 MainMenuScreen.LOGO_WORDS = Object.freeze(['Light ', 'Lane']);
 // An entry not available yet.
 MainMenuScreen.LOCKED_CLASS = 'light-lane-menu-locked';
-// The backdrop's layers, back to front (light-lane-home-* in css/lightLane.css): behind the floor, then on it.
-MainMenuScreen.BACKDROP_PARTS = Object.freeze(['sky', 'sky light-lane-home-sky-bright']);
-// The mist: [columns, rows] of cells (css/lightLane.css sizes and places them), mirrored by these classes, its frame in
-// this custom property.
-MainMenuScreen.MIST_CELLS     = Object.freeze([8, 4]);
-MainMenuScreen.MIRROR_ACROSS  = 'light-lane-home-mirror-across';
-MainMenuScreen.MIRROR_ALONG   = 'light-lane-home-mirror-along';
-MainMenuScreen.MIST_PROPERTY  = '--light-lane-home-fog';
-// Absolute: a relative url() in a custom property resolves against the style sheet that uses it (css/), not the page.
-MainMenuScreen.MIST_FRAMES    = Object.freeze([...Array(LightLaneTuning.FOG_FRAMES).keys()].map((frame) => ('url("' + new URL(LightLaneModels.fogFrameUrl(frame), document.baseURI).href + '")')));
+// The backdrop's layers behind the floor, back to front (light-lane-home-* in css/lightLane.css).
+MainMenuScreen.BACKDROP_PARTS = Object.freeze(['sky', 'sky light-lane-home-sky-lit']);
+// The mist: cells [width, height] em (the frames' 2:1), the first column MIST_ORIGIN em left of the middle (a cell's
+// middle on the middle, user request), a mirrored pair of rows rolled every MIST_ROLL seconds, its frames played at
+// MIST_FPS (half the track's FOG_FPS, user request: half the drawing); its clock counts MIST_STEP_MAX ms at most
+// between two frames.
+MainMenuScreen.MIST_CELL      = Object.freeze([20, 10]);
+MainMenuScreen.MIST_ORIGIN    = 70;
+MainMenuScreen.MIST_ROLL      = 28;
+MainMenuScreen.MIST_FPS       = (LightLaneTuning.FOG_FPS / 2);
+MainMenuScreen.MIST_STEP_MAX  = 100;
 MainMenuScreen.MODAL_SELECTOR = '.app-menu-overlay';
 MainMenuScreen.LESS_MOTION    = '(prefers-reduced-motion: reduce)';
 MainMenuScreen.MS_PER_SECOND  = 1000;
@@ -190,7 +247,7 @@ MainMenuScreen._mistDecoded = null;
 // The lightning (user requests): every FLASH_EVERY [min, max] seconds at random, FLASH_DURATION ms of the lights
 // layer's opacity, one of FLASH_STRIKES at random: a strike then its fading, or a strike, a short dip, a second strike,
 // its fading.
-MainMenuScreen.LIGHTNING_SELECTOR = '.light-lane-home-sky-bright';
+MainMenuScreen.LIGHTNING_SELECTOR = '.light-lane-home-sky-lit';
 MainMenuScreen.FLASH_EVERY        = Object.freeze([3, 8]);
 MainMenuScreen.FLASH_DURATION     = 900;
 MainMenuScreen.FLASH_STRIKES      = Object.freeze([

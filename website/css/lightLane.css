@@ -431,9 +431,8 @@
 
 /* --- Home backdrop (art § 10.1, MainMenuScreen._addBackdrop), the main menu only: the city under its sky, a floor of
    mist rolling towards it in CSS perspective (no 3D engine), lightning on the city now and then, a shade under the
-   menu. Animated: the mist's roll (a transform), its frames and the lightning (MainMenuScreen: a style write, an
-   opacity); no animated filter. Paused under a modal (options, help), still when the system asks for less motion.
-   The horizon (no line drawn, user decision) at 81 % of the screen, under the menu. */
+   menu. The mist is a canvas MainMenuScreen draws (no CSS animation). The horizon (no line drawn, user decision) at
+   81 % of the screen, under the menu. */
 
 .light-lane-home {
     overflow: hidden;
@@ -447,66 +446,45 @@
     /* Its city base (its lights end at 95.5 % of its height, measured) on the horizon: 85 % × 0.955 ≈ 81 %. */
     /* Its tower's light bar (3 px right of the picture's middle) under the logo's letters, which sit left of the middle
        by half their letter spacing (the last letter's spacing is blank): 0.45em to the left. */
+    /* The picture as it is, without any filter (user decision). */
     background: url('../assets/lightLane/textures/skyline.jpg') calc(50% - 0.45em) top / auto 85% no-repeat;
-    filter: brightness(0.55);
 }
 
 /* The lightning (user requests: the city only, its lights only, the picture as it is most of the time, a flash every
-   3 to 8 s, strong on the whites): over the dark city, its lights alone (a strong contrast drops everything under the
-   middle to black), added in screen mode, so black stays black and only the lights rise; hidden, MainMenuScreen plays
-   its opacity in a flash (no animated filter: the browser blends two still layers). */
-.light-lane-home-sky-bright {
+   3 to 8 s, strong on the whites): over the picture, the same picture's lights alone (a strong contrast drops
+   everything under the middle to black) added in screen mode, so black stays black and only the lights rise; hidden,
+   MainMenuScreen plays its opacity in a flash. On its own layer for good (will-change), not promoted and demoted at
+   each flash. */
+.light-lane-home-sky-lit {
     filter: brightness(0.9) contrast(2.6);
     mix-blend-mode: screen;
     opacity: 0;
+    will-change: opacity;
 }
 
-/* The floor: a wide plane hinged on the horizon, tilted towards the viewer; its far part fades into the night. 13em
-   long: under perspective(14em) at 72°, a point d along it is seen d cos 72° × 14 / (14 − d sin 72°) under the horizon,
-   the screen's bottom (19 % ≈ 6.5em) at d ≈ 8.7em; past 14 / sin 72° ≈ 14.7em it would be behind the eye (flicker,
-   huge shapes on some browsers). */
+/* The floor: a plane hinged on the horizon, tilted towards the viewer (its colours as they are, user decision). 120 %
+   wide: the horizon (d = 0, seen at scale 1) is its widest part on screen, nearer is magnified. 13em long: under
+   perspective(14em) at 72°, a point d along it is seen d cos 72° × 14 / (14 − d sin 72°) under the horizon, the
+   screen's bottom (19 % ≈ 6.5em) at d ≈ 8.7em; past 14 / sin 72° ≈ 14.7em it would be behind the eye (flicker, huge
+   shapes on some browsers). */
 .light-lane-home-floor {
     position: absolute;
     top: 81%;
-    left: -60%;
-    width: 220%;
+    left: -10%;
+    width: 120%;
     height: 13em;
     overflow: hidden;
     transform-origin: 50% 0;
     transform: perspective(14em) rotateX(72deg);
-    -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, #000000 22%);
-    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, #000000 22%);
 }
 
-/* The mist, as the track's fog (user request): the game's 60 frames played at FOG_FPS (MainMenuScreen sets the frame in
-   --light-lane-home-fog), on a grid of 20em × 10em cells (the frames' 2:1) mirrored every other one across and along so
-   neighbours join without a seam, shifted half a cell to the right (user request: a cell's middle on the middle); 60 %
-   light (the track's FOG_COLOR 153 of 255); it rolls towards the viewer by a mirrored pair of rows a loop. */
+/* The mist, as the track's fog (user request): a canvas over the whole floor, MainMenuScreen._drawMist; the fog frames'
+   colours as they are (user decision). */
 .light-lane-home-mist {
     position: absolute;
-    top: -20em;
-    left: calc(50% - 70em);
-    display: grid;
-    grid-template-columns: repeat(8, 20em);
-    grid-auto-rows: 10em;
-    opacity: 0.6;
-    animation: light-lane-home-roll-mist 14s linear infinite;
-}
-
-.light-lane-home-mist-cell {
-    background: var(--light-lane-home-fog) center / 100% 100% no-repeat;
-}
-
-.light-lane-home-mirror-across {
-    transform: scaleX(-1);
-}
-
-.light-lane-home-mirror-along {
-    transform: scaleY(-1);
-}
-
-.light-lane-home-mirror-across.light-lane-home-mirror-along {
-    transform: scale(-1, -1);
+    inset: 0;
+    width: 100%;
+    height: 100%;
 }
 
 /* Dark under the logo and the entries: the menu reads as on the plain background. */
@@ -514,25 +492,6 @@
     position: absolute;
     inset: 0;
     background: radial-gradient(ellipse 32% 42% at 50% 44%, rgba(4, 9, 12, 0.8) 0%, rgba(4, 9, 12, 0.6) 50%, rgba(4, 9, 12, 0) 100%);
-}
-
-@keyframes light-lane-home-roll-mist {
-    from {
-        transform: translateY(0);
-    }
-    to {
-        transform: translateY(20em);
-    }
-}
-
-.app-menu-display:has(.app-menu-overlay) .light-lane-home * {
-    animation-play-state: paused;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .light-lane-home * {
-        animation: none;
-    }
 }
 
 /* --- Best scores --- */
