@@ -769,35 +769,44 @@ class LightLaneModels {
         return [(r - half), (r + half)];
     }
 
-    // The Sentinel (art § 5.2), origin at the centre of its wing: a flat swept wing (SENTINEL_SHAPE.wing, nose towards −z)
-    // outlined in DANGER, two fins under it, a slot at its front in `slot` (WARN, LETHAL while it strikes).
+    // The Sentinel (art § 5.2): a hovering arch over the lanes (SENTINEL_SHAPE, user request: an original design) — a
+    // crown, a head under its middle, two legs slanting out and down, in the body's colours, their outlines in DANGER
+    // lines on both faces; the slot at the head's front in `slot` (WARN, LETHAL while it strikes), towards −z (the runner).
     static _sentinel(slot) {
-        const color = LightLaneTuning.COLOR;
-        const shape = LightLaneTuning.SENTINEL_SHAPE;
-        const line  = LightLaneTuning.LINE_SIZE;
-        const half  = (shape.thick / 2);
-        const o     = (LightLaneTuning.LINE_OUTSET + (line / 2));
-        const b     = new LightLaneObjectBuilder();
-        b.prism(shape.wing, -half, half, {top: color.BODY_TOP, side: color.BODY_SIDE, bottom: color.BODY_BOTTOM});
-        const n = shape.wing.length;
-        for (let i = 0; i < n; i++) {
-            const [xa, za] = shape.wing[i];
-            const [xb, zb] = shape.wing[(i + 1) % n];
-            b.bar([xa, (half + o), za], [xb, (half + o), zb], line, color.DANGER, [0, 1, 0]);
-            b.bar([xa, (-half - o), za], [xb, (-half - o), zb], line, color.DANGER, [0, -1, 0]);
+        const shape  = LightLaneTuning.SENTINEL_SHAPE;
+        const mirror = (outline) => outline.map(([x, y]) => [-x, y]).reverse();
+        const b      = new LightLaneObjectBuilder();
+        for (const [outline, depth] of [[shape.crown.outline, shape.crown.depth], [shape.head.outline, shape.head.depth],
+            [shape.leg.outline, shape.leg.depth], [mirror(shape.leg.outline), shape.leg.depth]]) {
+            LightLaneModels._extrude(b, outline, depth);
         }
-        const [finWidth, finHeight, finDepth] = shape.fin.size;
-        for (const sx of [-1, 1]) {
-            const x = (sx * shape.fin.x);
-            b.box([(x - (finWidth / 2)), (-half - finHeight), (-finDepth / 2)], [(x + (finWidth / 2)), -half, (finDepth / 2)], {top: null, side: color.BODY_SIDE, bottom: color.BODY_BOTTOM});
-            b.bar([x, (-half - finHeight - o), (-finDepth / 2)], [x, (-half - finHeight - o), (finDepth / 2)], line, color.DANGER, [0, -1, 0]);
-            b.bar([x, -half, (-finDepth / 2 - o)], [x, (-half - finHeight), (-finDepth / 2 - o)], line, color.DANGER, [0, 0, -1]);
-        }
-        const [slotWidth, slotHeight] = shape.slot;
-        const front = Math.min(...shape.wing.map(([, z]) => z));
-        b.rect((-slotWidth / 2), (-slotHeight / 2), (slotWidth / 2), (slotHeight / 2), (front - LightLaneTuning.LINE_OUTSET), slot, true);
+        const [width, height, y] = shape.slot;
+        b.rect((-width / 2), (y - (height / 2)), (width / 2), (y + (height / 2)), (shape.head.depth[0] - LightLaneTuning.LINE_OUTSET), slot, true);
 
         return b.data();
+    }
+
+    // A convex outline [x, y] (clockwise seen from the front) from z0 to z1 in the body's colours, its edges in DANGER
+    // lines on its front and back faces.
+    static _extrude(b, outline, [z0, z1]) {
+        const color  = LightLaneTuning.COLOR;
+        const line   = LightLaneTuning.LINE_SIZE;
+        const o      = (LightLaneTuning.LINE_OUTSET + (line / 2));
+        const n      = outline.length;
+        const cx     = (outline.reduce((sum, [x]) => (sum + x), 0) / n);
+        const cy     = (outline.reduce((sum, [, y]) => (sum + y), 0) / n);
+        const inside = [cx, cy, ((z0 + z1) / 2)];
+        b.facing(outline.map(([x, y]) => [x, y, z0]), inside, color.BODY_SIDE);
+        b.facing(outline.map(([x, y]) => [x, y, z1]), inside, color.BODY_SIDE);
+        for (let i = 0; i < n; i++) {
+            const [xa, ya] = outline[i];
+            const [xb, yb] = outline[(i + 1) % n];
+            // Its sides: lighter facing up, darker facing down (the body's top and bottom).
+            const up = ((xb - xa) > LightLaneModels.EPSILON);
+            b.facing([[xa, ya, z0], [xb, yb, z0], [xb, yb, z1], [xa, ya, z1]], inside, ((up) ? color.BODY_TOP : color.BODY_BOTTOM));
+            b.bar([xa, ya, (z0 - o)], [xb, yb, (z0 - o)], line, color.DANGER, [0, 0, -1]);
+            b.bar([xa, ya, (z1 + o)], [xb, yb, (z1 + o)], line, color.DANGER, [0, 0, 1]);
+        }
     }
 
     // A strike's mark on the floor (art § 5.2): `width` across, from 0 to its length along, LETHAL, see-through, glowing.

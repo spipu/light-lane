@@ -1,8 +1,8 @@
 /**
  * Static suite: the bootstrap definition against the disk. Every file served from website/ is declared in
  * js/libBootstrap.json (the shell precached by the service worker aside), every declared file exists once, and every
- * class is declared after the class it extends (a file before those that use it at load time). Every translation in
- * the 4 languages, with the same placeholders.
+ * class is declared after the class it extends (a file before those that use it at load time); no method defined twice
+ * in a class (the second silently replaces the first). Every translation in the 4 languages, with the same placeholders.
  */
 
 const fs   = require('fs');
@@ -12,6 +12,8 @@ const vm   = require('vm');
 const WEBSITE_DIR  = path.resolve(__dirname, '..', '..', 'website');
 const DEFINITION   = 'js/libBootstrap.json';
 const TRANSLATIONS = 'js/lightLane/lightLaneTranslations.js';
+// The game's own sources (the engine and the socle are checked in 3d-engine).
+const GAME_DIR     = 'js/lightLane/';
 const LANGUAGES    = ['en', 'fr', 'it', 'es'];
 // Served without a declaration: the shell precached by the service worker, the icons, the definition, the licences.
 const UNDECLARED   = [
@@ -33,9 +35,27 @@ class BootstrapBench {
         this._list('declared but missing', files.filter((file) => !fs.existsSync(path.join(WEBSITE_DIR, file))));
         this._list('declared twice', files.filter((file, index) => (files.indexOf(file) !== index)));
         this._list('classes declared before the class they extend', this._lateParents(files.filter((file) => file.endsWith('.js'))));
+        this._list('methods defined twice in a class', this._twiceDefined(files.filter((file) => (file.endsWith('.js') && file.startsWith(GAME_DIR)))));
         this._list('translations missing a language or a placeholder', this._translationGaps());
 
         return this._failures;
+    }
+
+    // A method (static or not) defined twice at the class's level (4 spaces in) in one file: the second replaces the first.
+    _twiceDefined(files) {
+        const twice = [];
+        for (const file of files) {
+            const seen = new Set();
+            for (const match of this._read(file).matchAll(/^    (static |async |static async )?([A-Za-z_$][\w$]*)\(.*\) \{$/gm)) {
+                const key = (((match[1] ?? '').includes('static')) ? 'static ' : '') + match[2];
+                if (seen.has(key)) {
+                    twice.push(file + ': ' + key);
+                }
+                seen.add(key);
+            }
+        }
+
+        return twice;
     }
 
     // Every code of the catalogue in each language, with the same {placeholders} in all of them.

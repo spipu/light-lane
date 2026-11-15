@@ -350,12 +350,15 @@ LightLaneTuning.SWEEP_DRAWN          = Object.freeze({low: Object.freeze([0.15, 
 LightLaneTuning.SWEEP_DEPTH          = 0.10;
 LightLaneTuning.SWEEP_THICK          = 0.20;
 LightLaneTuning.SWEEP_WIDTH          = Object.freeze([6.4, 10.4]);
-// Its shape (art § 5.2): a flat swept wing (outline [x, z], `thick`), two fins under it, a slot at its front.
+// Its shape (art § 5.2, user request: a hovering arch over the lanes, an original design): slabs of convex outlines
+// [x, y] seen from the front (clockwise), each `depth` [z0, z1] deep: a wide crown, a head pointing down under its middle
+// (the slot at its front), two legs slanting out and down (the right one; the left mirrored); its origin at the crown's
+// underside, in the middle.
 LightLaneTuning.SENTINEL_SHAPE = Object.freeze({
-    wing:  Object.freeze([[-1.0, -2.0], [1.0, -2.0], [3.0, 1.0], [1.2, 2.0], [-1.2, 2.0], [-3.0, 1.0]]),
-    thick: 0.8,
-    fin:   Object.freeze({x: 1.8, size: Object.freeze([0.1, 1.2, 1.6])}),
-    slot:  Object.freeze([1.6, 0.4]),
+    crown: Object.freeze({outline: Object.freeze([[-3.3, 0.15], [-2.9, 0.55], [2.9, 0.55], [3.3, 0.15], [3.0, -0.15], [-3.0, -0.15]]), depth: Object.freeze([-0.9, 0.9])}),
+    head:  Object.freeze({outline: Object.freeze([[-0.95, -0.1], [0.95, -0.1], [0.7, -0.85], [0, -1.35], [-0.7, -0.85]]), depth: Object.freeze([-1.2, 0.6])}),
+    leg:   Object.freeze({outline: Object.freeze([[2.45, -0.1], [3.15, -0.1], [3.5, -2.35], [3.25, -2.9], [2.95, -2.35]]), depth: Object.freeze([-0.45, 0.45])}),
+    slot:  Object.freeze([1.0, 0.22, -0.45]),   // width, height, its centre's y on the head's front
 });
 
 // --- The robot (tech § 8.1): every ROBOT_STEP it looks ROBOT_LATENCY ahead, tries each order then a second one
