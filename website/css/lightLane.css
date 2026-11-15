@@ -450,16 +450,22 @@
     background: url('../assets/lightLane/textures/skyline.jpg') calc(50% - 0.45em) top / auto 85% no-repeat;
 }
 
-/* The lightning (user requests: the city only, its lights only, the picture as it is most of the time, a flash every
-   3 to 8 s, strong on the whites): over the picture, the same picture's lights alone (a strong contrast drops
-   everything under the middle to black) added in screen mode, so black stays black and only the lights rise; hidden,
-   MainMenuScreen plays its opacity in a flash. On its own layer for good (will-change), not promoted and demoted at
-   each flash. */
+/* The lightning (user requests: the city only, the picture as it is most of the time, a flash every 3 to 8 s, in CSS
+   only, nothing under 40 % of light touched, the lights above pushed towards white in a line): the same picture
+   through that curve (MainMenuScreen._addLightningFilter, an inline SVG filter), over the picture, hidden;
+   MainMenuScreen plays its opacity in a flash. No blend mode: under 40 % both layers are the same, so the darks never
+   move. On its own layer for good (will-change), not promoted and demoted at each flash. */
 .light-lane-home-sky-lit {
-    filter: brightness(0.9) contrast(2.6);
-    mix-blend-mode: screen;
+    filter: url('#light-lane-home-lightning');
     opacity: 0;
     will-change: opacity;
+}
+
+/* The lightning's filter only: takes no room. */
+.light-lane-home-filters {
+    position: absolute;
+    width: 0;
+    height: 0;
 }
 
 /* The floor: a plane hinged on the horizon, tilted towards the viewer (its colours as they are, user decision). 120 %
@@ -478,13 +484,14 @@
     transform: perspective(14em) rotateX(72deg);
 }
 
-/* The mist, as the track's fog (user request): a canvas over the whole floor, MainMenuScreen._drawMist; the fog frames'
-   colours as they are (user decision). */
+/* The mist, as the track's fog (user request): a canvas over the whole floor, MainMenuScreen._drawMist; darker all the
+   time (user request: 60 % of its light), by its opacity over the near black ground (no filter). */
 .light-lane-home-mist {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
+    opacity: 0.6;
 }
 
 /* Dark under the logo and the entries: the menu reads as on the plain background. */

@@ -84,6 +84,7 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
             AppMenuDom.addElement(backdrop, 'div', 'light-lane-home-' + part);
         }
         this._lightning   = backdrop.querySelector(MainMenuScreen.LIGHTNING_SELECTOR);
+        MainMenuScreen._addLightningFilter(backdrop);
         const floor       = AppMenuDom.addElement(backdrop, 'div', 'light-lane-home-floor');
         this._mist        = AppMenuDom.addElement(floor, 'canvas', 'light-lane-home-mist');
         this._mistContext = this._mist.getContext('2d');
@@ -107,6 +108,39 @@ class MainMenuScreen extends AbstractLightLaneMenuScreen {
                 this._mistLoop = requestAnimationFrame((time) => this._animateMist(time));
             }
         }).catch((error) => console.warn('MainMenuScreen - the mist frames could not be decoded', error));
+    }
+
+    /**
+     * The lightning's curve (user request), the filter of css/lightLane.css's lit city: each channel unchanged up to
+     * LIGHTNING_KNEE, above it pushed towards white, x + (1 − x) × LIGHTNING_FORCE × t^LIGHTNING_POWER, t = (x − knee)
+     * / (1 − knee); worked in sRGB (the picture's values, not linear light). Inline SVG: CSS only, no picture added.
+     *
+     * @param {HTMLElement} parent
+     */
+    static _addLightningFilter(parent) {
+        const svg      = document.createElementNS(MainMenuScreen.SVG_NS, 'svg');
+        const filter   = document.createElementNS(MainMenuScreen.SVG_NS, 'filter');
+        const transfer = document.createElementNS(MainMenuScreen.SVG_NS, 'feComponentTransfer');
+        const knee     = MainMenuScreen.LIGHTNING_KNEE;
+        const steps    = MainMenuScreen.LIGHTNING_STEPS;
+        const values   = [...Array(steps + 1).keys()].map((i) => {
+            const x    = (i / steps);
+            const rise = ((x > knee) ? Math.pow(((x - knee) / (1 - knee)), MainMenuScreen.LIGHTNING_POWER) : 0);
+            return (x + ((1 - x) * MainMenuScreen.LIGHTNING_FORCE * rise)).toFixed(4);
+        }).join(' ');
+        svg.setAttribute('class', 'light-lane-home-filters');
+        svg.setAttribute('aria-hidden', 'true');
+        filter.setAttribute('id', MainMenuScreen.LIGHTNING_FILTER);
+        filter.setAttribute('color-interpolation-filters', 'sRGB');
+        for (const channel of MainMenuScreen.CHANNELS) {
+            const curve = document.createElementNS(MainMenuScreen.SVG_NS, channel);
+            curve.setAttribute('type', 'table');
+            curve.setAttribute('tableValues', values);
+            transfer.appendChild(curve);
+        }
+        filter.appendChild(transfer);
+        svg.appendChild(filter);
+        parent.appendChild(svg);
     }
 
     /**
@@ -248,6 +282,17 @@ MainMenuScreen._mistDecoded = null;
 // layer's opacity, one of FLASH_STRIKES at random: a strike then its fading, or a strike, a short dip, a second strike,
 // its fading.
 MainMenuScreen.LIGHTNING_SELECTOR = '.light-lane-home-sky-lit';
+// The lightning's curve (_addLightningFilter): its SVG filter's id (css/lightLane.css), unchanged up to LIGHTNING_KNEE
+// (40 %: at 70 %, then 50 %, the lightning could hardly be seen, user requests), LIGHTNING_FORCE of the way to white
+// above it, along t^LIGHTNING_POWER (1, a straight line: the square, under 1 for t in [0, 1], rose too little; user
+// decisions), sampled in LIGHTNING_STEPS steps.
+MainMenuScreen.LIGHTNING_FILTER   = 'light-lane-home-lightning';
+MainMenuScreen.LIGHTNING_KNEE     = 0.4;
+MainMenuScreen.LIGHTNING_FORCE    = 1;
+MainMenuScreen.LIGHTNING_POWER    = 1;
+MainMenuScreen.LIGHTNING_STEPS    = 100;
+MainMenuScreen.SVG_NS             = 'http://www.w3.org/2000/svg';
+MainMenuScreen.CHANNELS           = Object.freeze(['feFuncR', 'feFuncG', 'feFuncB']);
 MainMenuScreen.FLASH_EVERY        = Object.freeze([3, 8]);
 MainMenuScreen.FLASH_DURATION     = 900;
 MainMenuScreen.FLASH_STRIKES      = Object.freeze([
