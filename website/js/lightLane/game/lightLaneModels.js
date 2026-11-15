@@ -579,6 +579,14 @@ class LightLaneModels {
         return b.data();
     }
 
+    /**
+     * @param {int} frame - 0 to FOG_FRAMES − 1
+     * @returns {string} the URL of a frame of the fog (the track's, the home backdrop's)
+     */
+    static fogFrameUrl(frame) {
+        return (LightLaneModels.ASSETS + 'textures/fog/fog_' + String(frame).padStart(2, '0') + '.jpg');
+    }
+
     // The fog plane under the track (user request): a grid of cells FOG_TILE large, the texture (the 60 frames played
     // at FOG_FPS) mirrored every other cell across and along, so neighbour cells join without a seam (the picture does
     // not tile); a cell edge on the track's axis, under the track. Its z runs from 0, two cells more than the reach, so
@@ -614,7 +622,7 @@ class LightLaneModels {
         }
 
         return {
-            textures: frames.map((i) => (LightLaneModels.ASSETS + 'textures/fog/fog_' + String(i).padStart(2, '0') + '.jpg')),
+            textures: frames.map((i) => LightLaneModels.fogFrameUrl(i)),
             points:   points,
             faces:    faces
         };
