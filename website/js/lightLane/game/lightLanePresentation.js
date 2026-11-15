@@ -881,12 +881,12 @@ class LightLanePresentation {
 }
 
 LightLanePresentation.VIRTUAL_WIDTH   = 1920;
-// The textures (the background picture, the fog) unsmoothed, raw texels (user decision: sharper than the smoothed
-// picture, drawn at the canvas's CSS pixels, not the screen's).
-LightLanePresentation.TEXTURE_SMOOTHING = false;
 LightLanePresentation.VIRTUAL_HEIGHT  = 1080;
 LightLanePresentation.HALF_TURN       = 180;
 LightLanePresentation.FULL_TURN       = 360;
+// The textures (the background picture, the fog) unsmoothed, raw texels (user decision: sharper than the smoothed
+// picture, drawn at the canvas's CSS pixels, not the screen's).
+LightLanePresentation.TEXTURE_SMOOTHING = false;
 LightLanePresentation.CLIP_IDLE       = 'idle';
 LightLanePresentation.CLIP_RUN        = 'run';
 LightLanePresentation.CLIP_JUMP       = 'jump';
