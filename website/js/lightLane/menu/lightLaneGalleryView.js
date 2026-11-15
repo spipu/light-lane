@@ -168,7 +168,8 @@ class LightLaneGalleryView {
     swipe(dx, dy) {
         const limit  = LightLaneTuning.GALLERY_PITCH_MAX;
         this._manual = true;
-        this._angle += (dx * LightLaneTuning.GALLERY_TURN_SWIPE);
+        // The item follows the finger: a move to the right brings its near side to the right (user request).
+        this._angle -= (dx * LightLaneTuning.GALLERY_TURN_SWIPE);
         this._pitch  = Math.max(-limit, Math.min(limit, (this._pitch + (dy * LightLaneTuning.GALLERY_TURN_SWIPE))));
 
         return this;
