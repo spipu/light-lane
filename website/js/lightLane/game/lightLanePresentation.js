@@ -872,6 +872,7 @@ class LightLanePresentation {
             .setLightAmbient([...LightLaneTuning.AMBIENT])
             .setDepthShading({...LightLaneTuning.DEPTH_SHADING})
             .setSky(LightLanePresentation._sky())
+            .setTextureSmoothing(LightLanePresentation.TEXTURE_SMOOTHING)
             .addLight(this._light);
         this._hud = new LightLaneHud(this._engine, this._simulation).setBest(this._best).setOnPause(this._onPause).setShieldSource(this._shield);
         this._screen.bindHud(this._hud);
@@ -880,6 +881,9 @@ class LightLanePresentation {
 }
 
 LightLanePresentation.VIRTUAL_WIDTH   = 1920;
+// The textures (the background picture, the fog) unsmoothed, raw texels (user decision: sharper than the smoothed
+// picture, drawn at the canvas's CSS pixels, not the screen's).
+LightLanePresentation.TEXTURE_SMOOTHING = false;
 LightLanePresentation.VIRTUAL_HEIGHT  = 1080;
 LightLanePresentation.HALF_TURN       = 180;
 LightLanePresentation.FULL_TURN       = 360;
