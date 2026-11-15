@@ -74,7 +74,7 @@ class LightLaneSimulation {
         this._events.clear();
         const seed          = (options.seed ?? LightLaneRandom.freshSeed());
         // The bench's locked tier (generation § 8.3): its catalogue and its speed, fixed.
-        this._generator.lockTier((options.locked === true) ? tier : null);
+        this._generator.lockTier((options.locked === true) ? tier : null).setFixedSpeed(options.speed ?? null);
         this._generator.reset(seed, this._z, (options.track ?? null));
         this._sentinel.reset(seed);
         this._generator.update(this._z);
@@ -311,7 +311,7 @@ class LightLaneSimulation {
         this._score.addDistance(metres, false);
         this._generator.update(this._z);
         this._moveEnemies(runner.getSpeedFactor());
-        if (this._checkGaps() || this._checkObstacles() || this._checkEnemies() || this._checkShots(dt)) {
+        if (this._checkGaps() || this._checkObstacles() || this._checkEnemies() || this._checkTrails() || this._checkShots(dt)) {
             return;
         }
         this._checkCoins();
@@ -354,6 +354,40 @@ class LightLaneSimulation {
             }
             // One collision a step.
             return false;
+        }
+
+        return false;
+    }
+
+    // A bike's light trail (from TRAIL_TIER): a thin wall TRAIL_HEIGHT high along the path it left behind its back; the
+    // runner's box touching it, or crossing it since the step before, under its top: a shock. A jump clears it.
+    _checkTrails() {
+        const runner = this._runner;
+        if (runner.getY() >= LightLaneTuning.TRAIL_HEIGHT) {
+            return false;
+        }
+        const reach = (LightLaneTuning.RUNNER_HALF_WIDTH + (LightLaneTuning.TRAIL_THICK / 2));
+        const x     = runner.getX();
+        const z     = this._z;
+        for (const entity of this._generator.getActive()) {
+            // Already dealt with (the test mode's shield counts one death a bike).
+            if (!entity.hasTrail() || entity.isHit()) {
+                continue;
+            }
+            const start = entity.getTrailStart();
+            if ((z < start) || (z > (start + LightLaneTuning.TRAIL_LENGTH))) {
+                continue;
+            }
+            // A crossing since the step before only counts when the runner was already beside the trail then (passing the
+            // bike's back, the bike's path there says nothing of a trail).
+            const side    = (x - entity.trailX(z));
+            const beside  = (this._previous.z >= entity.getPrevTrailStart());
+            const crossed = (beside && (((this._previous.x - entity.trailX(this._previous.z)) * side) < 0));
+            if ((Math.abs(side) < reach) || crossed) {
+                entity.markHit();
+                this._kill(LightLaneRunner.DEATH_SHOCK);
+                return true;
+            }
         }
 
         return false;

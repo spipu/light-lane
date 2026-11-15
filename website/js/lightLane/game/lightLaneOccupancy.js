@@ -19,6 +19,8 @@ class LightLaneOccupancy {
         this._width    = 0;         // the search's cells across a lane
         this._reach    = new Int32Array(LightLaneOccupancy.LANES);
         this._reached  = new Uint8Array(LightLaneOccupancy.LANES);
+        this._starts   = 0;         // the last search's passable start lanes, a bit per lane (lane + LANE_OFFSET)
+        this._reaching = 0;         // those of them that reach past the row
         this._grow(LightLaneOccupancy.START_CAPACITY);
     }
 
@@ -133,17 +135,27 @@ class LightLaneOccupancy {
         const reactCells = LightLaneOccupancy.cells(LightLaneTuning.FAIR_REACTION, speed);
         const laneCells  = LightLaneOccupancy.cells(LightLaneTuning.LANE_CHANGE_TIME, speed);
         this._reach.fill(0);
-        let fair = true;
+        this._starts   = 0;
+        this._reaching = 0;
         for (let start = -LightLaneOccupancy.LANE_OFFSET; start <= LightLaneOccupancy.LANE_OFFSET; start++) {
             if (!LightLaneOccupancy.passable(this.get(start, k0))) {
                 continue;
             }
-            if (!this._search(start, k0, kLast, reactCells, laneCells)) {
-                fair = false;
+            const bit = (1 << (start + LightLaneOccupancy.LANE_OFFSET));
+            this._starts |= bit;
+            if (this._search(start, k0, kLast, reactCells, laneCells)) {
+                this._reaching |= bit;
             }
         }
 
-        return fair;
+        return (this._reaching === this._starts);
+    }
+
+    /**
+     * @returns {int} the start lanes of the last search that reach past the row, a bit per lane (lane + LANE_OFFSET)
+     */
+    getReaching() {
+        return this._reaching;
     }
 
     /**

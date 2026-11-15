@@ -5,7 +5,8 @@
  * presentation reads it to draw it.
  *
  * An enemy is laid by its meeting point zm (getZ()); the simulation moves it each step from the runner's z (moveEnemy):
- * its front at zm + ENEMY_SPEED_SHARE × (zm − zRunner), so it reaches zm exactly when the runner does; a stalker moves
+ * its front at zm + share × (zm − zRunner) (share: ENEMY_SPEED / the runner's target speed there, set by the generator),
+ * so it reaches zm exactly when the runner does, about ENEMY_SPEED on the ground; a stalker moves
  * across to its lane of destination by the time left to the meeting (τ). Its box of the step before is kept: the
  * collision is tested in relative positions (gameplay § 5.1).
  */
@@ -28,11 +29,20 @@ class LightLaneEntity {
         this._front   = 0;        // an enemy's moving front, z
         this._warn    = false;    // a stalker announcing its move
         this._heading = 0;        // the angle of a stalker's path while it moves across, degrees (+: towards +x); its lean
+        this._trail   = false;    // a bike that leaves a light trail
+        this._share   = 0;        // a bike's speed as a share of the runner's
+        this._moveFrom = null;    // a stalker's front when its move across started (its path is a function of its front)
+        this._moveSpan = 0;       // the distance its front runs during the move
         this._prevBox = {x0: 0, x1: 0, y0: 0, y1: 0, z0: 0, z1: 0};
     }
 
     reset() {
         this._warn    = false;
+        this._trail   = false;
+        this._share   = 0;
+        this._moveFrom = null;
+        this._moveSpan = 0;
+        this._heading = 0;
         this._kind    = null;
         this._code    = null;
         this._hit     = false;
@@ -80,6 +90,9 @@ class LightLaneEntity {
         this._front  = z;
         this._warn   = false;
         this._heading = 0;
+        this._trail   = false;
+        this._moveFrom = null;
+        this._moveSpan = 0;
         LightLaneEntity._copyBox(this._prevBox, box);
 
         return this;
@@ -94,26 +107,110 @@ class LightLaneEntity {
     moveEnemy(zRunner, speed) {
         const spec = LightLaneTuning.OBSTACLES[this._code];
         LightLaneEntity._copyBox(this._prevBox, this._box);
-        this._front = (this._z + (LightLaneTuning.ENEMY_SPEED_SHARE * (this._z - zRunner)));
-        let x       = (this._lane * LightLaneTuning.LANE_WIDTH);
+        this._front = (this._z + (this._share * (this._z - zRunner)));
         if (this._kind === LightLaneEntity.STALKER) {
             const ahead = Math.max(speed, LightLaneEntity.MIN_SPEED);
             const tau   = ((this._z - zRunner) / ahead);
-            const s     = Math.min(1, Math.max(0, ((LightLaneTuning.STALKER_MOVE - tau) / LightLaneTuning.STALKER_MOVE_TIME)));
-            const ease  = ((3 * s * s) - (2 * s * s * s));
-            const width = ((this._toLane - this._lane) * LightLaneTuning.LANE_WIDTH);
-            x           = (x + (width * ease));
+            // Its move starts at τ = STALKER_MOVE: from there its path is a function of its front (so is its trail).
+            if ((this._moveFrom === null) && (tau <= LightLaneTuning.STALKER_MOVE)) {
+                this._moveFrom = (this._front + (this._share * ahead * (LightLaneTuning.STALKER_MOVE - tau)));
+                this._moveSpan = (this._share * ahead * LightLaneTuning.STALKER_MOVE_TIME);
+            }
+            const s     = this._moveShare(this._front, this._moveFrom, this._moveSpan);
             this._warn  = ((tau <= LightLaneTuning.STALKER_WARN) && (s < 1));
-            // Its sideways speed (the S-curve's slope over the move's time) against its own speed ahead.
-            const across  = ((width * 6 * s * (1 - s)) / LightLaneTuning.STALKER_MOVE_TIME);
-            this._heading = (Math.atan2(across, (LightLaneTuning.ENEMY_SPEED_SHARE * ahead)) * LightLaneEntity.DEGREES);
+            // The angle of its path: its sideways change against the distance its front runs.
+            const width   = ((this._toLane - this._lane) * LightLaneTuning.LANE_WIDTH);
+            const across  = ((this._moveSpan > 0) ? ((width * 6 * s * (1 - s)) / this._moveSpan) : 0);
+            this._heading = (Math.atan(across) * LightLaneEntity.DEGREES);
         }
+        const x  = this.pathX(this._front);
         this._x  = x;
         const box = this._box;
         box.x0 = (x - spec.halfWidth);
         box.x1 = (x + spec.halfWidth);
         box.z0 = (this._front + spec.z0);
         box.z1 = (this._front + spec.z1);
+    }
+
+    /**
+     * An enemy's x when its front is at `front` (a stalker: on its lane of start before its move, then the S-curve, then
+     * on its lane of destination). Once its move has started, its actual move; before, the move planned at `speed`
+     * (the generator's estimate: the same at a steady speed).
+     *
+     * @param {number} front
+     * @param {number} speed - m/s, for a move not started yet
+     * @returns {number}
+     */
+    pathX(front, speed = 0) {
+        const x = (this._lane * LightLaneTuning.LANE_WIDTH);
+        if (this._kind !== LightLaneEntity.STALKER) {
+            return x;
+        }
+        let from = this._moveFrom;
+        let span = this._moveSpan;
+        if ((from === null) && (speed > 0)) {
+            from = (this._z + (this._share * speed * LightLaneTuning.STALKER_MOVE));
+            span = (this._share * speed * LightLaneTuning.STALKER_MOVE_TIME);
+        }
+        const s = this._moveShare(front, from, span);
+
+        return (x + ((this._toLane - this._lane) * LightLaneTuning.LANE_WIDTH * ((3 * s * s) - (2 * s * s * s))));
+    }
+
+    /**
+     * @param {boolean} on - the bike leaves a light trail (from TRAIL_TIER)
+     * @returns {LightLaneEntity} this
+     */
+    setTrail(on) {
+        this._trail = on;
+
+        return this;
+    }
+
+    hasTrail() {
+        return this._trail;
+    }
+
+    /**
+     * @param {number} share - a bike's speed as a share of the runner's (ENEMY_SPEED / the runner's target speed)
+     * @returns {LightLaneEntity} this
+     */
+    setShare(share) {
+        this._share = share;
+
+        return this;
+    }
+
+    getShare() {
+        return this._share;
+    }
+
+    // Where its trail starts behind it (its back), z; it runs TRAIL_LENGTH further.
+    getTrailStart() {
+        return (this._front + this._length);
+    }
+
+    // Where its trail started on the step before, z.
+    getPrevTrailStart() {
+        return ((this._prevBox.z0 - LightLaneTuning.OBSTACLES[this._code].z0) + this._length);
+    }
+
+    /**
+     * @param {number} z     - a point of the trail
+     * @param {number} speed - m/s, for a move not started yet (the generator)
+     * @returns {number} the trail's x there: where the bike was when its back was at z
+     */
+    trailX(z, speed = 0) {
+        return this.pathX((z - this._length), speed);
+    }
+
+    // The share of a stalker's move done when its front is at `front` (0 before, 1 after).
+    _moveShare(front, from, span) {
+        if ((from === null) || (span <= 0)) {
+            return 0;
+        }
+
+        return Math.min(1, Math.max(0, ((from - front) / span)));
     }
 
     /**
@@ -137,6 +234,10 @@ class LightLaneEntity {
         this._front   = other._front;
         this._warn    = other._warn;
         this._heading = other._heading;
+        this._trail   = other._trail;
+        this._share   = other._share;
+        this._moveFrom = other._moveFrom;
+        this._moveSpan = other._moveSpan;
         LightLaneEntity._copyBox(this._box, other._box);
         LightLaneEntity._copyBox(this._prevBox, other._prevBox);
 
@@ -203,6 +304,16 @@ class LightLaneEntity {
     // The back of the element, z (an enemy: of its meeting point).
     getEnd() {
         return (this._z + this._length);
+    }
+
+    // The far end of what shows of it, z: a bike's trail runs on behind its back after the bike has passed the runner
+    // (user request: kept until it is behind, not gone at once with its bike).
+    getVisibleEnd() {
+        if (!this._trail) {
+            return this.getEnd();
+        }
+
+        return Math.max(this.getEnd(), (this.getTrailStart() + LightLaneTuning.TRAIL_LENGTH));
     }
 
     // An obstacle (it blocks, makes trip or swallows), an enemy included; not something to pick up.

@@ -230,9 +230,10 @@ LightLaneTuning.OBSTACLES = Object.freeze({
     'T>': {kind: 'stalker', halfWidth: 0.40, y0: 0.05, y1: 1.30, z0: 0.10, z1: 3.10, length: 3.2, side: 1},
 });
 // --- Enemies (gameplay § 6, generation § 5) ---
-// An enemy runs to the runner at ENEMY_SPEED_SHARE of its real speed: z = zm + share × (zm − zRunner), so it reaches its
-// meeting point zm exactly when the runner does.
-LightLaneTuning.ENEMY_SPEED_SHARE  = 0.5;
+// A bike runs to the runner at ENEMY_SPEED on the ground whatever the tier (user decision): its share of the runner's
+// speed is ENEMY_SPEED / the target speed of its meeting (the test mode's fixed speed, if any), its front at
+// zm + share × (zm − zRunner), so it reaches its meeting point zm exactly when the runner does.
+LightLaneTuning.ENEMY_SPEED        = 10;
 // Drawn (activated) within ENEMY_SHOWN ahead of the runner.
 LightLaneTuning.ENEMY_SHOWN        = 135;
 // A stalker (τ = time to the meeting point): announced from STALKER_WARN, moves across from STALKER_MOVE over
@@ -240,6 +241,22 @@ LightLaneTuning.ENEMY_SHOWN        = 135;
 LightLaneTuning.STALKER_WARN       = 2.4;
 LightLaneTuning.STALKER_MOVE       = 1.6;
 LightLaneTuning.STALKER_MOVE_TIME  = 0.5;
+// From TRAIL_TIER (4 200 m, user decision), a bike leaves a light trail behind its back: TRAIL_LENGTH long (3 tiles) in
+// TRAIL_BANDS bands each dimmer than the one before (TRAIL_FADE of the colour), TRAIL_THICK thick (a quarter of the
+// tyre) and TRAIL_HEIGHT high (the tyre's); it follows the bike's path, kills at a touch, a jump clears it.
+LightLaneTuning.TRAIL_TIER   = 7;
+LightLaneTuning.TRAIL_LENGTH = 30;
+LightLaneTuning.TRAIL_BANDS  = 3;
+LightLaneTuning.TRAIL_FADE   = Object.freeze([1.0, 0.6, 0.3]);
+LightLaneTuning.TRAIL_THICK  = 0.085;
+LightLaneTuning.TRAIL_HEIGHT = 1.2;
+// Its drawn pieces: straight runs in TRAIL_PIECE_LONG pieces, the curve of a lane change in TRAIL_PIECE_SHORT ones.
+LightLaneTuning.TRAIL_PIECE_LONG  = 5;
+LightLaneTuning.TRAIL_PIECE_SHORT = 1;
+// Its last TRAIL_TAIL metres hold its end, rounded like the bike's wheel (user request), in the last band's light: drawn in
+// TRAIL_TAIL_SLICES slices (one piece in a straight run, slice by slice along a curve).
+LightLaneTuning.TRAIL_TAIL        = 5;
+LightLaneTuning.TRAIL_TAIL_SLICES = 10;
 // While it moves across, a stalker only leans into its move (user request: no turn of its heading): ENEMY_LEAN degrees of
 // lean a degree of the angle of its path (its sideways speed against its own speed ahead), ENEMY_LEAN_MAX at most.
 LightLaneTuning.ENEMY_LEAN         = 1.2;

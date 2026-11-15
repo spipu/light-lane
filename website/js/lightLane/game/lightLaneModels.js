@@ -41,6 +41,18 @@ class LightLaneModels {
             LightLaneModels._load(LightLaneModels.STALKER + suffix, LightLaneModels._enemy(side, false));
             LightLaneModels._load(LightLaneModels.STALKER + suffix + LightLaneModels.WARN, LightLaneModels._enemy(side, true));
         }
+        for (let band = 0; band < LightLaneTuning.TRAIL_BANDS; band++) {
+            for (const length of [LightLaneTuning.TRAIL_PIECE_LONG, LightLaneTuning.TRAIL_PIECE_SHORT]) {
+                LightLaneModels._load(LightLaneModels.trailCode(band, length), LightLaneModels._trailWall(length, [LightLaneTuning.TRAIL_FADE[band]]));
+            }
+        }
+        // The tail with the rounded end: whole (a straight run), and slice by slice (a curve).
+        const tail = [...Array(LightLaneTuning.TRAIL_TAIL_SLICES).keys()].map(() => LightLaneTuning.TRAIL_FADE[LightLaneTuning.TRAIL_BANDS - 1]);
+        const slice = (LightLaneTuning.TRAIL_TAIL / LightLaneTuning.TRAIL_TAIL_SLICES);
+        LightLaneModels._load(LightLaneModels.TRAIL_TAIL, LightLaneModels._trailWall(LightLaneTuning.TRAIL_TAIL, tail, 0));
+        tail.forEach((fade, k) => {
+            LightLaneModels._load(LightLaneModels.TRAIL_TAIL + k, LightLaneModels._trailWall(slice, [fade], ((tail.length - 1 - k) * slice)));
+        });
         LightLaneModels._load(LightLaneModels.SENTINEL, LightLaneModels._sentinel(color.WARN));
         LightLaneModels._load(LightLaneModels.SENTINEL_STRIKE, LightLaneModels._sentinel(color.LETHAL));
         LightLaneTuning.STRIKE_WIDTHS.forEach((width, i) => {
@@ -196,6 +208,15 @@ class LightLaneModels {
         const from = (spec.holeFrom - (LightLaneTuning.TILE_LENGTH / 2));
 
         return [from, (from + spec.length)];
+    }
+
+    /**
+     * @param {int}    band   - 0 the nearest the bike (the brightest) to TRAIL_BANDS − 1
+     * @param {number} length - TRAIL_PIECE_LONG or TRAIL_PIECE_SHORT
+     * @returns {string} the code of a piece of a bike's trail
+     */
+    static trailCode(band, length) {
+        return (LightLaneModels.TRAIL + band + '_' + length);
     }
 
     /**
@@ -694,6 +715,60 @@ class LightLaneModels {
         }
     }
 
+    // A piece of a bike's light trail (user decision): a thin wall TRAIL_THICK × TRAIL_HEIGHT × length from the floor,
+    // centred on its origin along z, in as many slices as `fades` (from −z to +z), each its sides and top glowing and
+    // additive in DANGER, its fade (its band's TRAIL_FADE) as its alpha: the renderer whitens a
+    // glowing face's colour towards its core (coreWhite) before the alpha, so a dimmed colour would hardly fade.
+    //
+    // `toEnd`: the distance from its +z end to the trail's end, when it holds the end's rounding (user request: the trail
+    // ends like the bike's wheel seen from the side, a half disc of TRAIL_HEIGHT / 2), null otherwise.
+    static _trailWall(length, fades, toEnd = null) {
+        const w      = (LightLaneTuning.TRAIL_THICK / 2);
+        const step   = (length / fades.length);
+        const b      = new LightLaneObjectBuilder();
+        fades.forEach((fade, k) => {
+            const z0  = ((-length / 2) + (k * step));
+            const z1  = (z0 + step);
+            const rgb = [...LightLaneTuning.COLOR.DANGER, fade];
+            // Cut finer where the rounding bends the wall.
+            const cuts = (((toEnd !== null) && ((toEnd + ((length / 2) - z1)) < LightLaneModels.trailRadius())) ? Math.ceil(step / LightLaneModels.TRAIL_ROUND_STEP) : 1);
+            for (let c = 0; c < cuts; c++) {
+                const za = (z0 + ((c * step) / cuts));
+                const zb = (z0 + (((c + 1) * step) / cuts));
+                const [la, ha] = LightLaneModels._trailSpan(za, length, toEnd);
+                const [lb, hb] = LightLaneModels._trailSpan(zb, length, toEnd);
+                const inside   = [0, ((la + ha + lb + hb) / 4), ((za + zb) / 2)];
+                for (const x of [-w, w]) {
+                    b.facing([[x, la, za], [x, ha, za], [x, hb, zb], [x, lb, zb]], inside, rgb, true, true);
+                }
+                b.facing([[-w, ha, za], [w, ha, za], [w, hb, zb], [-w, hb, zb]], inside, rgb, true, true);
+            }
+        });
+
+        return b.data();
+    }
+
+    // The trail's end rounding: a half disc of the wheel's radius (half the trail's height).
+    static trailRadius() {
+        return (LightLaneTuning.TRAIL_HEIGHT / 2);
+    }
+
+    // The wall's [bottom, top] at z of a piece `length` long: full, or within the end's half disc.
+    static _trailSpan(z, length, toEnd) {
+        const r = LightLaneModels.trailRadius();
+        if (toEnd === null) {
+            return [0, LightLaneTuning.TRAIL_HEIGHT];
+        }
+        const fromEnd = (toEnd + ((length / 2) - z));
+        if (fromEnd >= r) {
+            return [0, LightLaneTuning.TRAIL_HEIGHT];
+        }
+        const u    = (r - fromEnd);
+        const half = Math.sqrt(Math.max(0, ((r * r) - (u * u))));
+
+        return [(r - half), (r + half)];
+    }
+
     // The Sentinel (art § 5.2), origin at the centre of its wing: a flat swept wing (SENTINEL_SHAPE.wing, nose towards −z)
     // outlined in DANGER, two fins under it, a slot at its front in `slot` (WARN, LETHAL while it strikes).
     static _sentinel(slot) {
@@ -826,6 +901,12 @@ LightLaneModels.ARROW      = 'arrow';
 // The chevrons by the way they point: [suffix, side].
 LightLaneModels.ARROW_SIDES = Object.freeze([['L', -1], ['R', 1]]);
 LightLaneModels.STALKER_ARROW = 'stalkerArrow';
+// A piece of a bike's trail, by band and length (trailCode).
+LightLaneModels.TRAIL      = 'trail';
+// The steps of the trail's end rounding, m.
+LightLaneModels.TRAIL_ROUND_STEP = 0.1;
+// The trail's tail with its rounded end, whole; a slice of it: + its index.
+LightLaneModels.TRAIL_TAIL = 'trailTail';
 LightLaneModels.PROWLER    = 'prowler';
 // A stalker by the way it goes (ARROW_SIDES suffix), and WARN while it announces it.
 LightLaneModels.STALKER    = 'stalker';

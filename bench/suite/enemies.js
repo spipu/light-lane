@@ -64,7 +64,7 @@ function run() {
     // A jump whose peak (half its time) is on the middle of the crossing: the runner meets the box (front at
     // zm + share × (zm − z)) at z = zm + (z0 − half depth) / (1 + share) and leaves it at zm + (z1 + half depth) / (1 + share).
     const spec   = Tuning.OBSTACLES.R;
-    const share  = (1 + Tuning.ENEMY_SPEED_SHARE);
+    const share  = (1 + (Tuning.ENEMY_SPEED / SPEED));
     const middle = (zm + ((((spec.z0 - Tuning.RUNNER_HALF_DEPTH) + (spec.z1 + Tuning.RUNNER_HALF_DEPTH)) / 2) / share));
     const jumpAt = (time) => (middle - ((time / 2) * SPEED));
     c.check('prowler, a normal jump centred on it: through (a motorbike\'s height)', (play(['E2'], [{z: jumpAt(Tuning.JUMP_TIME), order: 'jump'}]).death === null));
@@ -120,6 +120,41 @@ function run() {
     c.check('stalker: one announce event, at τ 2.4 s', ((announced.length === 1) && within(announced[0], Tuning.STALKER_WARN)), announced.join(', '));
     c.check('stalker: its lane of start free at the meeting (stay in the centre)', (play(['C2'], []).death === null));
     c.check('stalker: its lane of arrival deadly (go left)', (play(['C2'], [{z: 50, order: 'left'}]).death === 'shock'));
+
+    // The bikes' light trails (from TRAIL_TIER, gameplay § 6.3): rows written at tier 7, orders at z past the meeting point.
+    const trailRun = (rows, orders) => {
+        const sim   = new Simulation().newRun({seed: 1, tier: Tuning.TRAIL_TIER, track: rows.map(row), speed: SPEED});
+        const meet  = (sim.getZ() + Tuning.FIRST_ROW);
+        const out   = [];
+        let next    = 0;
+        for (let i = 0; (i < 100000) && (sim.getState() !== Simulation.GAME_OVER) && (sim.getZ() < (meet + 40)); i++) {
+            out.length = 0;
+            while ((sim.getState() === Simulation.RUNNING) && (next < orders.length) && (sim.getZ() >= (meet + orders[next].dz))) {
+                out.push(orders[next++].order);
+            }
+            sim.advance(step, out);
+            sim.getEvents().clear();
+        }
+
+        return sim.getDeath();
+    };
+    c.check('trail: a bike from tier 7 leaves one', (() => {
+        const sim = new Simulation().newRun({seed: 1, tier: Tuning.TRAIL_TIER, track: [row('E2')], speed: SPEED});
+        return sim.getTrack().getActive().some((e) => (e.isEnemy() && e.hasTrail()));
+    })());
+    const Entity   = game.get('LightLaneEntity');
+    const recycled = new Entity().setObstacle('R', 0, 10).setTrail(true).setShare(0.5).reset().setCoin(0, 0.7, 20);
+    c.check('trail: a recycled bike made a coin has none', !recycled.hasTrail());
+    c.check('trail: none before tier 7', !new Simulation().newRun({seed: 1, track: [row('E2')], speed: SPEED}).getTrack().getActive().some((e) => e.hasTrail()));
+    c.check('trail: back into a prowler\'s lane just behind it: shock', (trailRun(['E2'], [{dz: -20, order: 'left'}, {dz: 10, order: 'right'}]) === 'shock'));
+    c.check('trail: back into its lane past the trail: through', (trailRun(['E2'], [{dz: -20, order: 'left'}, {dz: 25, order: 'right'}]) === null));
+    c.check('trail: staying on the lane a stalker left: shock', (trailRun(['C2'], []) === 'shock'));
+    c.check('trail: away from a stalker\'s lanes early: through', (trailRun(['C2'], [{dz: -20, order: 'right'}]) === null));
+    // Over a prowler's trail in the middle lane: from the right lane to the left one, both lane changes in a jump.
+    const leap   = 10;
+    const second = (leap + ((Tuning.JUMP_TIME * 0.17) * SPEED));
+    c.check('trail: jumped over from one side to the other: through', (trailRun(['E2'], [{dz: -20, order: 'right'}, {dz: leap, order: 'jump'}, {dz: second, order: 'left'}, {dz: second, order: 'left'}]) === null));
+    c.check('trail: the same crossing without a jump: shock', (trailRun(['E2'], [{dz: -20, order: 'right'}, {dz: second, order: 'left'}, {dz: second, order: 'left'}]) === 'shock'));
 
     return c.failures;
 }

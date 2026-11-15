@@ -41,6 +41,8 @@ class LightLanePresentation {
         this._ids          = new Map();   // object code → id
         this._views        = new Map();   // entity → {serial, code, instance, frame}
         this._arrows       = new Map();   // a stalker → its floor arrow's view, same form
+        this._trailViews   = [];          // records of the trails' pieces {code, instance}, reused: those under _trailCount drawn this frame
+        this._trailCount   = 0;
         this._sentinel     = null;        // the Sentinel's instances: {ship, mark, beam, frame, ray}
         this._free         = new Map();   // object code → free instances
         this._frame        = 0;
@@ -48,7 +50,8 @@ class LightLanePresentation {
         this._bloom        = {glowDepthShading: LightLaneTuning.BLOOM_GLOW_DEPTH_SHADING, glowFar: LightLaneTuning.BLOOM_GLOW_FAR,
             glowFarMax: LightLaneTuning.BLOOM_GLOW_FAR_MAX};   // RendererWebglBloom.DEFAULTS otherwise
         this._facing       = [0, 0, 0];
-        this._enemyAngles  = [0, 0, 0];   // an enemy's rotation, degrees, written in place   // the runner's rotation, degrees: facing +z, its lean in z
+        this._enemyAngles  = [0, 0, 0];   // an enemy's rotation, degrees, written in place
+        this._trailAngles  = [0, 0, 0];   // a trail piece's rotation, degrees, written in place   // the runner's rotation, degrees: facing +z, its lean in z
         // The runner's light: its position moved in place every frame.
         this._lightRange   = (LightLaneTuning.RUNNER_LIGHT_RANGE * LightLaneTuning.RUNNER_HEIGHT / 2);
         this._light        = new Light([...LightLaneTuning.RUNNER_LIGHT_COLOR], this._lightRange, [0, 0, 0]);
@@ -142,6 +145,7 @@ class LightLanePresentation {
             this._release(view);
         }
         this._arrows.clear();
+        this._releaseTrails();
         this._rows.forEach((slot) => this._clearSlot(slot));
         this._hidden       = false;
         this._deathLight   = null;
@@ -501,6 +505,7 @@ class LightLanePresentation {
         const runTime = this._simulation.getRunTime();
         const z       = this._simulation.getZ();
         const blink   = ((Math.floor(this._time * LightLaneTuning.WARN_BLINK_HZ * 2) % 2) === 0);
+        this._releaseTrails();
         for (const entity of this._simulation.getTrack().getActive()) {
             let code = LightLaneModels.obstacleCode(entity, blink);
             if (code === null) {
@@ -511,7 +516,11 @@ class LightLanePresentation {
                 if ((entity.getFront() - z) > LightLaneTuning.ENEMY_SHOWN) {
                     continue;
                 }
-                this._drawEnemy(entity, code, frame);
+                // A bike that has passed the runner, kept while its trail is still ahead (user request): its trail only.
+                if (entity.getEnd() >= (z - LightLaneTuning.RETIRE_BEHIND)) {
+                    this._drawEnemy(entity, code, frame);
+                }
+                this._drawTrail(entity);
                 continue;
             }
             // A block shows its side crosses on the side the camera sees.
@@ -558,6 +567,97 @@ class LightLanePresentation {
         const arrow = this._view(this._arrows, entity, (LightLaneModels.STALKER_ARROW + side), frame);
         arrow.instance.placeAt((entity.getToLane() * LightLaneTuning.LANE_WIDTH), -LightLaneTuning.TILE_THICKNESS, (entity.getFront() - LightLaneTuning.STALKER_ARROW_AHEAD));
         this._engine.drawInstance(arrow.instance);
+    }
+
+    /**
+     * A bike's light trail (gameplay § 6.3): from its back, TRAIL_LENGTH along the path it left, band by band (each
+     * dimmer); straight runs in long pieces, the curve of a lane change in short ones turned along it.
+     */
+    _drawTrail(entity) {
+        if (!entity.hasTrail()) {
+            return;
+        }
+        const start  = entity.getTrailStart();
+        const band   = (LightLaneTuning.TRAIL_LENGTH / LightLaneTuning.TRAIL_BANDS);
+        const body   = (LightLaneTuning.TRAIL_LENGTH - LightLaneTuning.TRAIL_TAIL);
+        const angles = this._trailAngles;
+        let s        = 0;
+        while (s < (body - LightLanePresentation.EPSILON)) {
+            const index = Math.min((LightLaneTuning.TRAIL_BANDS - 1), Math.floor((s + LightLanePresentation.EPSILON) / band));
+            const long  = LightLaneTuning.TRAIL_PIECE_LONG;
+            const end   = ((index + 1) * band);
+            const x0    = entity.trailX(start + s);
+            const fits  = (((s + long) <= (Math.min(end, body) + LightLanePresentation.EPSILON)) && (Math.abs(entity.trailX(start + s + long) - x0) < LightLanePresentation.EPSILON)
+                && (Math.abs(entity.trailX(start + s + (long / 2)) - x0) < LightLanePresentation.EPSILON));
+            const length = ((fits) ? long : LightLaneTuning.TRAIL_PIECE_SHORT);
+            // A piece turned along a curve runs its length on the path: it covers less along z, the next starts there.
+            const slope  = ((entity.trailX(start + s + length) - x0) / length);
+            const along  = (length / Math.sqrt(1 + (slope * slope)));
+            const x1     = entity.trailX(start + s + along);
+            const code   = LightLaneModels.trailCode(index, length);
+            const piece  = this._trailPiece(code);
+            angles[1] = (Math.atan2((x1 - x0), along) * LightLanePresentation.HALF_TURN / Math.PI);
+            piece.instance.setRotation(angles);
+            piece.instance.placeAt(((x0 + x1) / 2), 0, (start + s + (along / 2)));
+            this._engine.drawInstance(piece.instance);
+            s += along;
+        }
+        this._drawTrailTail(entity, (start + s), ((start + LightLaneTuning.TRAIL_LENGTH) - (start + s)));
+    }
+
+    // The trail's last TRAIL_TAIL metres, its end rounded like the wheel (user request): one piece on a straight run, else
+    // slice by slice along the curve.
+    _drawTrailTail(entity, from, length) {
+        if (length <= LightLanePresentation.EPSILON) {
+            return;
+        }
+        const x0       = entity.trailX(from);
+        const straight = ((Math.abs(entity.trailX(from + length) - x0) < LightLanePresentation.EPSILON) && (Math.abs(entity.trailX(from + (length / 2)) - x0) < LightLanePresentation.EPSILON));
+        const angles   = this._trailAngles;
+        if (straight) {
+            const piece = this._trailPiece(LightLaneModels.TRAIL_TAIL);
+            angles[1] = 0;
+            piece.instance.setRotation(angles);
+            piece.instance.placeAt(x0, 0, (from + (LightLaneTuning.TRAIL_TAIL / 2)));
+            this._engine.drawInstance(piece.instance);
+            return;
+        }
+        const slice = (LightLaneTuning.TRAIL_TAIL / LightLaneTuning.TRAIL_TAIL_SLICES);
+        let s       = 0;
+        for (let k = 0; (k < LightLaneTuning.TRAIL_TAIL_SLICES) && (s < (length - LightLanePresentation.EPSILON)); k++) {
+            const xa    = entity.trailX(from + s);
+            const slope = ((entity.trailX(from + s + slice) - xa) / slice);
+            const along = (slice / Math.sqrt(1 + (slope * slope)));
+            const xb    = entity.trailX(from + s + along);
+            const code  = (LightLaneModels.TRAIL_TAIL + k);
+            const piece = this._trailPiece(code);
+            angles[1] = (Math.atan2((xb - xa), along) * LightLanePresentation.HALF_TURN / Math.PI);
+            piece.instance.setRotation(angles);
+            piece.instance.placeAt(((xa + xb) / 2), 0, (from + s + (along / 2)));
+            this._engine.drawInstance(piece.instance);
+            s += along;
+        }
+    }
+
+    // A trail's piece for this frame: an instance of the object `code` in a reused record.
+    _trailPiece(code) {
+        if (this._trailCount === this._trailViews.length) {
+            this._trailViews.push({code: null, instance: null});
+        }
+        const piece    = this._trailViews[this._trailCount++];
+        piece.code     = code;
+        piece.instance = this._acquire(code);
+
+        return piece;
+    }
+
+    // The trails' pieces of the last frame back to their pools (their records kept).
+    _releaseTrails() {
+        for (let i = 0; i < this._trailCount; i++) {
+            this._release(this._trailViews[i]);
+            this._trailViews[i].instance = null;
+        }
+        this._trailCount = 0;
     }
 
     // The view of an entity in a map of views, made or remade for its serial and object.
@@ -771,6 +871,8 @@ LightLanePresentation.SIDES           = Object.freeze([-1, 1]);
 // Sign of Instance.setRotation for an enemy's lean into a move towards +x (Matrix.composeInstanceTransform: +z tilts the
 // top towards −x).
 LightLanePresentation.ENEMY_LEAN_SIGN = -1;
+// Lengths closer than this are equal (a trail's straight run, its band's end).
+LightLanePresentation.EPSILON         = 1e-6;
 // The sweeps' heights (SWEEP_DRAWN keys).
 LightLanePresentation.LOW             = 'low';
 // The bloom works with the WebGL renderer only.

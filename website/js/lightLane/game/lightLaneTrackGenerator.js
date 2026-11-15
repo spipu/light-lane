@@ -28,6 +28,7 @@ class LightLaneTrackGenerator {
         this._serial      = 0;
         this._start       = 0;
         this._locked      = null;    // the bench's locked tier, or null
+        this._fixedSpeed  = null;    // the test mode's fixed speed, or null
         this._imposed     = null;    // the test mode's rows still to come, or null
         this._sections    = [];      // {from, to, lanes, first, warnFrom, clearFrom}, in order
         this._spareSections = [];
@@ -48,6 +49,7 @@ class LightLaneTrackGenerator {
         this._placementCount = 0;
         this._row         = {pattern: null, lanes: null, offset: 0, z: 0};    // the row being laid
         this._lanesFree   = [];      // lanes, reused by the coins and the bonus
+        this._probe       = new LightLaneEntity();   // a bike of the row being checked, for its trail's path
     }
 
     /**
@@ -98,6 +100,7 @@ class LightLaneTrackGenerator {
         this._serial        = other._serial;
         this._start         = other._start;
         this._locked        = other._locked;
+        this._fixedSpeed    = other._fixedSpeed;
         this._fiveForced    = other._fiveForced;
         this._nextRowZ      = other._nextRowZ;
         this._lastRowZ      = other._lastRowZ;
@@ -166,7 +169,7 @@ class LightLaneTrackGenerator {
         let kept = 0;
         for (let i = 0; i < this._active.length; i++) {
             const entity = this._active[i];
-            if (entity.getEnd() < behind) {
+            if (entity.getVisibleEnd() < behind) {
                 this._pool.push(entity.reset());
                 continue;
             }
@@ -329,6 +332,21 @@ class LightLaneTrackGenerator {
 
     _speedAt(z) {
         return ((this._locked !== null) ? LightLaneDifficulty.tierSpeed(this._locked) : LightLaneDifficulty.targetSpeed(z));
+    }
+
+    // A bike's speed as a share of the runner's there: ENEMY_SPEED over the runner's speed (the test mode's fixed one).
+    _bikeShare(z) {
+        return (LightLaneTuning.ENEMY_SPEED / ((this._fixedSpeed !== null) ? Math.max(this._fixedSpeed, LightLaneTuning.ENEMY_SPEED) : this._speedAt(z)));
+    }
+
+    /**
+     * @param {number|null} speed - the run's fixed speed (the test mode's), the bikes' share follows it; null: none
+     * @returns {LightLaneTrackGenerator} this, to be reset() after
+     */
+    setFixedSpeed(speed) {
+        this._fixedSpeed = speed;
+
+        return this;
     }
 
     // --- Events planned at the start: the forced section, the first encounters, the bonuses ---
@@ -834,22 +852,50 @@ class LightLaneTrackGenerator {
 
     // --- Fairness (§ 8) ---
 
-    // The window from the last row's front to the end of this one: the void, the elements already laid, this row's.
+    // The row passes the check of § 8.2 (every start lane gets through, or else every one an empty row would let through).
     _isFair(row, speed, tier) {
+        if (this._searchWindow(row, true, speed, tier)) {
+            return true;
+        }
+        // Lanes doomed before the row (a trail ahead) are not its fault (§ 8.2): it passes when every start lane an
+        // empty row would let through still gets through, and at least one does. The grid is then laid again with the
+        // row, for the coins' reach counts.
+        const reaching = this._occupancy.getReaching();
+        this._searchWindow(row, false, speed, tier);
+        const baseline = this._occupancy.getReaching();
+        if ((baseline === 0) || ((reaching & baseline) !== baseline)) {
+            return false;
+        }
+        this._searchWindow(row, true, speed, tier);
+
+        return true;
+    }
+
+    // The window from the last row's front to the end of this one: the void, the elements already laid, this row's (when
+    // withRow); true when every passable start lane reaches past it.
+    _searchWindow(row, withRow, speed, tier) {
         const occupancy = this._occupancy;
         const z0        = this._lastRowZ;
         const end       = (row.z + row.pattern.longest);
         occupancy.begin(z0, (end + LightLaneTuning.CELL));
         this._markVoid(z0, (end + LightLaneTuning.CELL + (LightLaneOccupancy.SEARCH_MARGIN * LightLaneTuning.CELL)));
         for (const entity of this._active) {
-            if (entity.isObstacle() && (entity.getEnd() > z0)) {
+            if (entity.isObstacle() && ((entity.getEnd() > z0) || (entity.hasTrail() && ((entity.getZ() + LightLaneTrackGenerator.TRAIL_REACH) > z0)))) {
                 LightLaneTrackGenerator._markEntity(occupancy, entity.getCode(), entity.getLane(), entity.getZ());
+                if (entity.hasTrail()) {
+                    LightLaneTrackGenerator._markTrail(occupancy, entity, speed);
+                }
             }
         }
-        for (let i = 0; i < row.lanes.length; i++) {
+        for (let i = 0; (withRow && (i < row.lanes.length)); i++) {
             const code = row.lanes[i];
-            if (code !== '.') {
-                LightLaneTrackGenerator._markEntity(occupancy, code, this._laneOf(row, i), this._frontOf(row, i));
+            if (code === '.') {
+                continue;
+            }
+            const front = this._frontOf(row, i);
+            LightLaneTrackGenerator._markEntity(occupancy, code, this._laneOf(row, i), front);
+            if (LightLanePatterns.isEnemy(code) && (this._tierAt(front) >= LightLaneTuning.TRAIL_TIER)) {
+                LightLaneTrackGenerator._markTrail(occupancy, this._probe.setObstacle(code, this._laneOf(row, i), front).setShare(this._bikeShare(front)), speed);
             }
         }
         const boots = ((this._locked ?? tier) >= LightLaneTuning.FAIR_BOOTS_TIER);
@@ -882,14 +928,40 @@ class LightLaneTrackGenerator {
         occupancy.mark(lane, front, (front + spec.length), LightLaneTrackGenerator.CELL_STATE[spec.kind]);
     }
 
+    /**
+     * A bike's trail in the fairness grid (§ 8.1), where the runner would meet it: its point under the runner at z was
+     * left when the bike's back was there, and the runner is there when the bike's front is at zm + share × (zm − z),
+     * so from zm + length / (1 + share) to zm + (length + TRAIL_LENGTH) / (1 + share); each lane the trail (and the
+     * runner beside it) may touch there is blocked. Its jump over it is not counted (the check stays on the safe side).
+     */
+    static _markTrail(occupancy, entity, speed) {
+        const share  = (1 + entity.getShare());
+        const from   = (entity.getZ() + (entity.getLength() / share));
+        const to     = (entity.getZ() + ((entity.getLength() + LightLaneTuning.TRAIL_LENGTH) / share));
+        const reach  = ((LightLaneTuning.LANE_WIDTH / 2) + LightLaneTuning.RUNNER_HALF_WIDTH + (LightLaneTuning.TRAIL_THICK / 2));
+        const cell   = LightLaneTuning.CELL;
+        for (let z = from; z < to; z += cell) {
+            const x = entity.trailX(z, speed);
+            for (const lane of LightLaneTuning.LANES_5) {
+                if (Math.abs((lane * LightLaneTuning.LANE_WIDTH) - x) < reach) {
+                    occupancy.mark(lane, z, (z + cell), LightLaneOccupancy.BLOCKED);
+                }
+            }
+        }
+    }
+
     // --- Elements, bonuses, coins ---
 
     _placeElements(row) {
         const lanes = row.lanes;
         for (let i = 0; i < lanes.length; i++) {
-            if (lanes[i] !== '.') {
-                this._take().setObstacle(lanes[i], this._laneOf(row, i), this._frontOf(row, i));
+            if (lanes[i] === '.') {
+                continue;
             }
+            const front  = this._frontOf(row, i);
+            const entity = this._take().setObstacle(lanes[i], this._laneOf(row, i), front);
+            entity.setTrail(LightLanePatterns.isEnemy(lanes[i]) && (this._tierAt(front) >= LightLaneTuning.TRAIL_TIER));
+            entity.setShare(this._bikeShare(front));
         }
     }
 
@@ -948,10 +1020,11 @@ class LightLaneTrackGenerator {
         const pattern = row.pattern;
         const lanes   = row.lanes;
         if (pattern.coins === 'arc') {
-            // Its coins span a jump on both sides of the hurdle: none where a warning zone keeps the lane clear.
+            // Its coins span a jump on both sides of the hurdle: none where a warning zone keeps the lane clear, nor where
+            // the lane does not exist all along (a hurdle at the start of a section of 5).
             const lane = this._laneOf(row, lanes.indexOf('H'));
             const span = (speed * LightLaneTuning.JUMP_TIME);
-            if (this._clearOfWarnings(lane, (z - span), (z + span))) {
+            if (this._clearOfWarnings(lane, (z - span), (z + span)) && this._laneSpans(lane, (z - span), (z + span))) {
                 this._arc(lane, z, speed);
             }
             return;
@@ -1120,6 +1193,8 @@ LightLaneTrackGenerator.BONUS_WEIGHTS  = Object.freeze(Object.values(LightLaneTu
 // The first encounter of the first bonus: a row without any element.
 LightLaneTrackGenerator.EMPTY          = 'N0';
 LightLaneTrackGenerator.EPSILON        = 1e-6;
+// How far past its meeting point a bike's trail can block the runner (§ 8.1, _markTrail): the farthest, at the top speed.
+LightLaneTrackGenerator.TRAIL_REACH    = ((LightLaneTuning.OBSTACLES.R.length + LightLaneTuning.TRAIL_LENGTH) / (1 + (LightLaneTuning.ENEMY_SPEED / LightLaneTuning.SPEED_MAX)));
 // The scenery zones' own random source: seeded from the run's, so the track never depends on when they are read.
 LightLaneTrackGenerator.ZONE_SEED      = 0x5A17;
 // The occupancy of each kind of element (§ 8.1).

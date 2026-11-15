@@ -13,7 +13,9 @@ const {load, Checker} = require('../lib/gameContext.js');
 
 const SEEDS = [1, 2, 3, 4, 5];
 const ROWS  = 1000;
-// Rows the fairness check leaves empty (8 refusals): at most this share (2.3 % measured at 35 m/s, 0 to 2 % below).
+// Rows the fairness check leaves empty (8 refusals): at most this share (measured: 0 to 0.2 % up to
+// tier 6; with the bikes' trails, 1.4 % at tier 7 and 1.7 % at 35 m/s, a row being only blamed for the lanes an empty row
+// would let through).
 const EMPTY_MAX = 0.03;
 
 function run() {
@@ -47,6 +49,24 @@ function run() {
         }
     }
     c.check('the run: the start\'s rise at 250 m, 15 m/s at 600 m', (near(speeds[250], Difficulty.startSpeed(250), 0.02) && near(speeds[600], 15, 1e-9)), speeds[250].toFixed(3) + ', ' + speeds[600]);
+
+    // --- The comparison with an empty row (§ 8.2) ---
+    // Tier 1 (3 lanes, 15 m/s): a bike met just past the last row, its trail on the centre lane for some 20 m; a runner
+    // starting there cannot leave it in time (reaction), whatever the row. A row is only blamed for the lanes an empty row
+    // would let through: a block in the centre passes, a block on the left (its runner unable to go back to the centre,
+    // under the trail) does not.
+    const fair = (lanes) => {
+        const generator = new Generator().lockTier(1).reset(1, 0, null);
+        const z0        = 100;
+        const bike      = new Entity().setObstacle('R', 0, (z0 + 3)).setTrail(true).setShare(Tuning.ENEMY_SPEED / Difficulty.tierSpeed(1));
+        generator._active.push(bike);
+        generator._lastRowZ = z0;
+        const row = {pattern: {longest: 3, corridor: false, lanes: lanes}, lanes: lanes, offset: 0, z: (z0 + 15)};
+
+        return generator._isFair(row, Difficulty.tierSpeed(1), 1);
+    };
+    c.check('empty row comparison: a lane doomed before the row is not its fault (a block on it passes)', fair(['.', 'B3', '.']));
+    c.check('empty row comparison: a row dooming a lane an empty row lets through is refused', !fair(['B3', '.', '.']));
 
     // --- Locked tiers 0 to 2 ---
     for (const tier of [0, 1, 2, 3, 4, 5, 6, 7, 21]) {
